@@ -1,0 +1,35 @@
+# HACK3 subfolder
+HACK3/
+
+# Environment files (contain secrets!)
+.env
+.env.*
+*.env
+
+# Node
+node_modules/
+dist/
+
+# Database
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build artifacts
+*.tsbuildinfo

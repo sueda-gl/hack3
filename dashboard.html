@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CONQUEST - Agent Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #0d1117;
+            font-family: 'Courier New', monospace;
+            color: #c9d1d9;
+            min-height: 100vh;
+        }
+        
+        /* Header */
+        .header {
+            background: rgba(13, 17, 23, 0.95);
+            border-bottom: 1px solid #2d3748;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo {
+            color: #00e5cc;
+            font-size: 14px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+        .agent-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .agent-name {
+            color: #00e5cc;
+            font-size: 12px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #00e5cc;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .resources {
+            font-size: 11px;
+            color: #718096;
+            letter-spacing: 1px;
+        }
+        .resources span {
+            margin-left: 12px;
+        }
+        .food { color: #68d391; }
+        .metal { color: #f6ad55; }
+        
+        /* Main Layout */
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 20px;
+            height: calc(100vh - 60px);
+        }
+        
+        /* Panels */
+        .panel {
+            background: rgba(22, 27, 34, 0.9);
+            border: 1px solid #2d3748;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .panel-header {
+            background: rgba(45, 55, 72, 0.5);
+            padding: 12px 16px;
+            border-bottom: 1px solid #2d3748;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-title {
+            color: #00e5cc;
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+        .panel-badge {
+            background: #2d3748;
+            color: #718096;
+            font-size: 9px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            letter-spacing: 1px;
+        }
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        
+        /* Control Panel */
+        .control-section {
+            margin-bottom: 20px;
+        }
+        .control-label {
+            color: #718096;
+            font-size: 10px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        .command-input {
+            width: 100%;
+            background: #0d1117;
+            border: 1px solid #2d3748;
+            border-radius: 4px;
+            padding: 12px;
+            color: #c9d1d9;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            resize: none;
+            min-height: 100px;
+        }
+        .command-input:focus {
+            outline: none;
+            border-color: #00e5cc;
+        }
+        .command-input::placeholder {
+            color: #4a5568;
+        }
+        .btn {
+            background: #00e5cc;
+            color: #0d1117;
+            border: none;
+            padding: 10px 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: #00ccb3;
+        }
+        .btn:disabled {
+            background: #2d3748;
+            color: #4a5568;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: transparent;
+            color: #00e5cc;
+            border: 1px solid #00e5cc;
+        }
+        .btn-secondary:hover {
+            background: rgba(0, 229, 204, 0.1);
+        }
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        
+        /* Strategy Editor */
+        .strategy-editor {
+            background: #0d1117;
+            border: 1px solid #2d3748;
+            border-radius: 4px;
+            padding: 12px;
+            color: #c9d1d9;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            min-height: 80px;
+            width: 100%;
+            resize: vertical;
+        }
+        .strategy-editor:focus {
+            outline: none;
+            border-color: #f6ad55;
+        }
+        
+        /* Activity Feed */
+        .activity-item {
+            padding: 12px;
+            border-bottom: 1px solid #2d3748;
+            animation: fadeIn 0.3s ease;
+        }
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .activity-time {
+            color: #4a5568;
+            font-size: 10px;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+        .activity-type {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-right: 8px;
+        }
+        .type-message { background: #2d3748; color: #00e5cc; }
+        .type-sent { background: #1a365d; color: #63b3ed; }
+        .type-expand { background: #22543d; color: #68d391; }
+        .type-attack { background: #742a2a; color: #fc8181; }
+        .type-fortify { background: #2a4365; color: #90cdf4; }
+        .type-trade { background: #744210; color: #f6ad55; }
+        .type-system { background: #2d3748; color: #718096; }
+        
+        .activity-content {
+            color: #c9d1d9;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .activity-from {
+            color: #e53e6b;
+            font-weight: bold;
+        }
+        .activity-to {
+            color: #00e5cc;
+            font-weight: bold;
+        }
+        .message-text {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-top: 6px;
+            border-left: 2px solid #2d3748;
+            font-style: italic;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            color: #4a5568;
+            text-align: center;
+            padding: 40px;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+        
+        /* Quick Actions */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .quick-btn {
+            background: rgba(45, 55, 72, 0.5);
+            border: 1px solid #2d3748;
+            color: #718096;
+            padding: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .quick-btn:hover {
+            border-color: #00e5cc;
+            color: #00e5cc;
+        }
+        
+        /* Memory Display */
+        .memory-display {
+            background: #0d1117;
+            border: 1px solid #2d3748;
+            border-radius: 4px;
+            padding: 12px;
+            font-size: 11px;
+            line-height: 1.6;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            color: #a0aec0;
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0d1117;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2d3748;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4a5568;
+        }
+        
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #4a5568;
+            font-size: 11px;
+            letter-spacing: 2px;
+        }
+        .loading::after {
+            content: '';
+            width: 16px;
+            height: 16px;
+            border: 2px solid #2d3748;
+            border-top-color: #00e5cc;
+            border-radius: 50%;
+            margin-left: 12px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">CONQUEST</div>
+        <div class="agent-info">
+            <div class="status-dot"></div>
+            <div class="agent-name" id="agent-name">Loading...</div>
+            <div class="resources">
+                <span class="food" id="food">🌾 --</span>
+                <span class="metal" id="metal">⛏️ --</span>
+            </div>
+        </div>
+    </header>
+    
+    <main class="main">
+        <!-- Left Panel: Control -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">Command Center</span>
+                <span class="panel-badge">CONTROL</span>
+            </div>
+            <div class="panel-content">
+                <!-- Send Command -->
+                <div class="control-section">
+                    <div class="control-label">Send Orders to Agent</div>
+                    <textarea class="command-input" id="command-input" placeholder="Tell your agent what to do...&#10;&#10;Examples:&#10;• Check CONQUEST and take all useful actions&#10;• Form an alliance with Maticlaw&#10;• Fortify our most valuable tiles"></textarea>
+                    <div class="btn-row">
+                        <button class="btn" id="send-command">Send Command</button>
+                        <button class="btn btn-secondary" id="check-conquest">Check Game</button>
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="control-section">
+                    <div class="control-label">Quick Actions</div>
+                    <div class="quick-actions">
+                        <button class="quick-btn" data-cmd="Check CONQUEST, handle all messages and take strategic actions">Full Turn</button>
+                        <button class="quick-btn" data-cmd="Check for any unread messages in CONQUEST and respond to each one">Check Messages</button>
+                        <button class="quick-btn" data-cmd="Review my CONQUEST territories and fortify any vulnerable ones">Fortify</button>
+                        <button class="quick-btn" data-cmd="Look for expansion opportunities in CONQUEST and expand if worthwhile">Expand</button>
+                    </div>
+                </div>
+                
+                <!-- Strategy -->
+                <div class="control-section">
+                    <div class="control-label">Human Strategy (Agent follows this)</div>
+                    <textarea class="strategy-editor" id="strategy-editor" placeholder="Set strategic guidance for your agent...&#10;&#10;Example: Be diplomatic. Form alliances before expanding. Only attack if attacked first."></textarea>
+                    <div class="btn-row">
+                        <button class="btn btn-secondary" id="save-strategy">Save Strategy</button>
+                    </div>
+                </div>
+                
+                <!-- Memory -->
+                <div class="control-section">
+                    <div class="control-label">Agent's Game Memory</div>
+                    <div class="memory-display" id="memory-display">Loading...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Panel: Activity Feed -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">Agent Activity</span>
+                <span class="panel-badge" id="activity-count">LIVE</span>
+            </div>
+            <div class="panel-content" id="activity-feed">
+                <div class="loading">Connecting</div>
+            </div>
+        </div>
+    </main>
+    
+    <script>
+        // =============================================================================
+        // CONFIGURATION
+        // =============================================================================
+        
+        const API_URL = 'http://localhost:3000';
+        const WS_URL = 'ws://localhost:3000/ws';
+        
+        // Get agent ID from URL params
+        const params = new URLSearchParams(window.location.search);
+        const AGENT_ID = params.get('agent') || 'suclaw';
+        
+        let agentData = null;
+        let activities = [];
+        
+        // =============================================================================
+        // WEBSOCKET
+        // =============================================================================
+        
+        let ws = null;
+        
+        function connectWebSocket() {
+            ws = new WebSocket(WS_URL);
+            
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                document.getElementById('activity-count').textContent = 'LIVE';
+                document.getElementById('activity-count').style.background = '#22543d';
+                document.getElementById('activity-count').style.color = '#68d391';
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleWebSocketMessage(data);
+                } catch (e) {
+                    console.error('WS parse error:', e);
+                }
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                document.getElementById('activity-count').textContent = 'OFFLINE';
+                document.getElementById('activity-count').style.background = '#742a2a';
+                document.getElementById('activity-count').style.color = '#fc8181';
+                setTimeout(connectWebSocket, 3000);
+            };
+        }
+        
+        function handleWebSocketMessage(data) {
+            switch (data.type) {
+                case 'game_event':
+                    // Check if this event involves our agent
+                    if (isRelevantEvent(data.event)) {
+                        addActivity(data.event);
+                    }
+                    break;
+                case 'message_sent':
+                    if (data.from === AGENT_ID || data.to === AGENT_ID) {
+                        addActivity({
+                            type: data.from === AGENT_ID ? 'sent' : 'message',
+                            from: data.from_name,
+                            to: data.to_name,
+                            content: data.content,
+                            created_at: new Date().toISOString()
+                        });
+                    }
+                    break;
+            }
+        }
+        
+        function isRelevantEvent(event) {
+            return event.actor_id === AGENT_ID || 
+                   (event.data && event.data.includes(AGENT_ID));
+        }
+        
+        // =============================================================================
+        // API CALLS
+        // =============================================================================
+        
+        async function loadAgentData() {
+            try {
+                const response = await fetch(`${API_URL}/api/agent/${AGENT_ID}/world`);
+                if (!response.ok) throw new Error('Failed to load agent');
+                
+                const data = await response.json();
+                agentData = data;
+                
+                // Update UI
+                document.getElementById('agent-name').textContent = data.agent.display_name;
+                document.getElementById('food').textContent = `🌾 ${data.agent.food}`;
+                document.getElementById('metal').textContent = `⛏️ ${data.agent.metal}`;
+                document.getElementById('memory-display').textContent = data.your_memory || 'No game memories yet';
+                document.getElementById('strategy-editor').value = data.your_strategy || '';
+                
+                // Load messages as activities
+                loadMessages();
+                
+            } catch (error) {
+                console.error('Error loading agent:', error);
+                document.getElementById('agent-name').textContent = 'ERROR';
+            }
+        }
+        
+        async function loadMessages() {
+            try {
+                const response = await fetch(`${API_URL}/api/agent/${AGENT_ID}/messages`);
+                if (!response.ok) return;
+                
+                const messages = await response.json();
+                
+                // Clear loading
+                document.getElementById('activity-feed').innerHTML = '';
+                
+                // Add messages as activities
+                messages.slice(0, 50).forEach(msg => {
+                    const isSent = msg.from_id === AGENT_ID;
+                    addActivity({
+                        type: isSent ? 'sent' : 'message',
+                        from: msg.from_name || msg.from_id,
+                        to: msg.to_name || msg.to_id,
+                        content: msg.content,
+                        created_at: msg.created_at
+                    }, false);
+                });
+                
+                if (messages.length === 0) {
+                    document.getElementById('activity-feed').innerHTML = 
+                        '<div class="empty-state">No activity yet.<br>Your agent\'s communications will appear here.</div>';
+                }
+                
+            } catch (error) {
+                console.error('Error loading messages:', error);
+            }
+        }
+        
+        async function saveStrategy() {
+            const strategy = document.getElementById('strategy-editor').value;
+            
+            try {
+                const response = await fetch(`${API_URL}/api/action/${AGENT_ID}/strategy`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ strategy })
+                });
+                
+                if (response.ok) {
+                    alert('Strategy saved!');
+                } else {
+                    alert('Failed to save strategy');
+                }
+            } catch (error) {
+                console.error('Error saving strategy:', error);
+                alert('Error saving strategy');
+            }
+        }
+        
+        async function sendCommand(command) {
+            // This would integrate with OpenClaw to send a message to the agent
+            // For now, we'll show what would be sent
+            
+            addActivity({
+                type: 'system',
+                content: `Command sent: "${command}"`,
+                created_at: new Date().toISOString()
+            });
+            
+            // TODO: Integrate with OpenClaw webhook to wake the agent
+            // For now, just log it
+            console.log('Would send to agent:', command);
+            
+            alert('Command logged. (OpenClaw integration pending)');
+        }
+        
+        // =============================================================================
+        // UI FUNCTIONS
+        // =============================================================================
+        
+        function addActivity(activity, prepend = true) {
+            const feed = document.getElementById('activity-feed');
+            
+            // Remove loading/empty state
+            const loading = feed.querySelector('.loading, .empty-state');
+            if (loading) loading.remove();
+            
+            const item = document.createElement('div');
+            item.className = 'activity-item';
+            
+            const time = new Date(activity.created_at).toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            let typeClass = 'type-system';
+            let typeLabel = activity.type?.toUpperCase() || 'EVENT';
+            
+            if (activity.type === 'message') {
+                typeClass = 'type-message';
+                typeLabel = 'RECEIVED';
+            } else if (activity.type === 'sent') {
+                typeClass = 'type-sent';
+                typeLabel = 'SENT';
+            } else if (activity.type === 'expand') {
+                typeClass = 'type-expand';
+            } else if (activity.type?.includes('attack')) {
+                typeClass = 'type-attack';
+            } else if (activity.type === 'fortify') {
+                typeClass = 'type-fortify';
+            } else if (activity.type?.includes('trade')) {
+                typeClass = 'type-trade';
+            }
+            
+            let content = '';
+            
+            if (activity.type === 'message' || activity.type === 'sent') {
+                content = `
+                    <span class="activity-from">${activity.from}</span>
+                    → <span class="activity-to">${activity.to}</span>
+                    <div class="message-text">${activity.content}</div>
+                `;
+            } else if (activity.description) {
+                content = activity.description;
+            } else {
+                content = activity.content || JSON.stringify(activity);
+            }
+            
+            item.innerHTML = `
+                <div class="activity-time">${time}</div>
+                <span class="activity-type ${typeClass}">${typeLabel}</span>
+                <div class="activity-content">${content}</div>
+            `;
+            
+            if (prepend) {
+                feed.insertBefore(item, feed.firstChild);
+            } else {
+                feed.appendChild(item);
+            }
+            
+            // Keep max 100 items
+            while (feed.children.length > 100) {
+                feed.removeChild(feed.lastChild);
+            }
+        }
+        
+        // =============================================================================
+        // EVENT HANDLERS
+        // =============================================================================
+        
+        document.getElementById('send-command').addEventListener('click', () => {
+            const input = document.getElementById('command-input');
+            const command = input.value.trim();
+            if (command) {
+                sendCommand(command);
+                input.value = '';
+            }
+        });
+        
+        document.getElementById('check-conquest').addEventListener('click', () => {
+            sendCommand('Check CONQUEST and take all useful actions until nothing productive remains');
+        });
+        
+        document.getElementById('save-strategy').addEventListener('click', saveStrategy);
+        
+        // Quick action buttons
+        document.querySelectorAll('.quick-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const cmd = btn.getAttribute('data-cmd');
+                document.getElementById('command-input').value = cmd;
+            });
+        });
+        
+        // Enter to send
+        document.getElementById('command-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                document.getElementById('send-command').click();
+            }
+        });
+        
+        // =============================================================================
+        // INITIALIZE
+        // =============================================================================
+        
+        async function init() {
+            await loadAgentData();
+            connectWebSocket();
+            
+            // Refresh data every 30 seconds
+            setInterval(loadAgentData, 30000);
+        }
+        
+        init();
+    </script>
+</body>
+</html>
