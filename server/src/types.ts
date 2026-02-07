@@ -11,6 +11,8 @@ export interface Agent {
   display_name: string;
   food: number;
   metal: number;
+  capital_q: number | null;
+  capital_r: number | null;
   webhook_url: string | null;
   webhook_token: string | null;
   custom_strategy: string | null;
@@ -133,6 +135,7 @@ export interface WorldResponse {
     display_name: string;
     food: number;
     metal: number;
+    capital: { q: number; r: number } | null;
   };
   territories: Tile[];
   visible_tiles: VisibleTile[];
@@ -172,6 +175,7 @@ export type AgentAction =
   | { type: 'trade_propose'; to_agent_id: string; offer_food: number; offer_metal: number; request_food: number; request_metal: number }
   | { type: 'trade_accept'; trade_id: number }
   | { type: 'trade_reject'; trade_id: number }
+  | { type: 'set_capital'; target_q: number; target_r: number }
   | { type: 'wait' };  // Do nothing this turn
 
 export interface ActionResponse {

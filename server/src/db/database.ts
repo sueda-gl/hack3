@@ -27,6 +27,10 @@ function initializeDatabase() {
       food INTEGER DEFAULT 100,
       metal INTEGER DEFAULT 50,
       
+      -- Capital tile coordinates (one per agent)
+      capital_q INTEGER,
+      capital_r INTEGER,
+      
       -- Optional webhook for real-time notifications
       webhook_url TEXT,
       webhook_token TEXT,
@@ -157,6 +161,15 @@ function initializeDatabase() {
   }
 
   console.log('Database initialized with new schema');
+
+  // Migration: Add capital columns if they don't exist (for existing databases)
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN capital_q INTEGER`);
+    db.exec(`ALTER TABLE agents ADD COLUMN capital_r INTEGER`);
+    console.log('Migration: Added capital_q and capital_r columns to agents');
+  } catch (e) {
+    // Columns already exist, ignore
+  }
 }
 
 // Generate hexagonal grid

@@ -25,6 +25,7 @@ export function broadcastTileUpdate(tile: {
   owner_id: string | null;
   owner_name: string | null;
   fortification: number;
+  is_capital?: boolean;
 }) {
   broadcastEvent({
     type: 'tile_update',

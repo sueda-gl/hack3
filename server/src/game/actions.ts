@@ -84,11 +84,12 @@ function updateAgentResources(agentId: string, foodDelta: number, metalDelta: nu
 // Get tile with owner name and broadcast update
 function getTileAndBroadcast(q: number, r: number) {
   const tile = db.prepare(`
-    SELECT t.*, a.display_name as owner_name
+    SELECT t.*, a.display_name as owner_name,
+           CASE WHEN a.capital_q = t.q AND a.capital_r = t.r THEN 1 ELSE 0 END as is_capital
     FROM tiles t
     LEFT JOIN agents a ON t.owner_id = a.id
     WHERE t.q = ? AND t.r = ?
-  `).get(q, r) as (Tile & { owner_name: string | null }) | undefined;
+  `).get(q, r) as (Tile & { owner_name: string | null; is_capital: number }) | undefined;
   
   if (tile) {
     broadcastTileUpdate({
@@ -98,6 +99,7 @@ function getTileAndBroadcast(q: number, r: number) {
       owner_id: tile.owner_id,
       owner_name: tile.owner_name,
       fortification: tile.fortification,
+      is_capital: tile.is_capital === 1,
     });
   }
   
@@ -348,6 +350,9 @@ export function giftTile(agent: Agent, targetQ: number, targetR: number, toAgent
     db.prepare(`
       UPDATE tiles SET owner_id = ? WHERE q = ? AND r = ?
     `).run(recipient.id, targetQ, targetR);
+
+    // Clear capital if the gifted tile was the sender's capital
+    clearCapitalIfLost(agent.id, targetQ, targetR);
     
     // Log public event
     logEvent(agent.id, 'gift', 
@@ -371,6 +376,56 @@ export function giftTile(agent: Agent, targetQ: number, targetR: number, toAgent
       recipient: recipient.display_name,
     }
   };
+}
+
+// =============================================================================
+// SET CAPITAL ACTION
+// =============================================================================
+
+export function setCapital(agent: Agent, targetQ: number, targetR: number): ActionResponse {
+  // Get target tile
+  const targetTile = getTile(targetQ, targetR);
+  if (!targetTile) {
+    return { success: false, message: 'Target tile does not exist' };
+  }
+
+  // Check ownership
+  if (targetTile.owner_id !== agent.id) {
+    return { success: false, message: 'You can only set capital on your own tiles' };
+  }
+
+  // Update capital coordinates on the agent
+  db.prepare(`
+    UPDATE agents SET capital_q = ?, capital_r = ? WHERE id = ?
+  `).run(targetQ, targetR, agent.id);
+
+  // Log event
+  logEvent(agent.id, 'expand', `${agent.display_name} designated (${targetQ}, ${targetR}) as their capital`, {
+    tile: { q: targetQ, r: targetR },
+  });
+
+  return {
+    success: true,
+    message: `Successfully set (${targetQ}, ${targetR}) as your capital`,
+    data: {
+      capital: { q: targetQ, r: targetR },
+    }
+  };
+}
+
+// =============================================================================
+// CLEAR CAPITAL (when tile is lost)
+// =============================================================================
+
+export function clearCapitalIfLost(agentId: string, lostQ: number, lostR: number): void {
+  const agent = getAgent(agentId);
+  if (!agent) return;
+
+  if (agent.capital_q === lostQ && agent.capital_r === lostR) {
+    db.prepare(`
+      UPDATE agents SET capital_q = NULL, capital_r = NULL WHERE id = ?
+    `).run(agentId);
+  }
 }
 
 // =============================================================================

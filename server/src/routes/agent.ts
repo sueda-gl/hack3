@@ -108,6 +108,11 @@ router.post('/join', (req: Request, res: Response) => {
         UPDATE tiles SET owner_id = ? WHERE q = ? AND r = ?
       `).run(trimmedId, startingTile.q, startingTile.r);
 
+      // Set starting tile as capital
+      db.prepare(`
+        UPDATE agents SET capital_q = ?, capital_r = ? WHERE id = ?
+      `).run(startingTile.q, startingTile.r, trimmedId);
+
       // Log event
       db.prepare(`
         INSERT INTO events (type, actor_id, description, data)
@@ -259,6 +264,9 @@ router.get('/:id/world', (req: Request, res: Response) => {
       display_name: agent.display_name,
       food: agent.food,
       metal: agent.metal,
+      capital: agent.capital_q !== null && agent.capital_r !== null
+        ? { q: agent.capital_q, r: agent.capital_r }
+        : null,
     },
     territories,
     visible_tiles: visibleTiles,

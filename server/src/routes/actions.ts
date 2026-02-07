@@ -4,7 +4,7 @@ import type { Agent, ActionRequest, AgentAction, GAME_CONSTANTS as GameConstants
 import { GAME_CONSTANTS } from '../types.js';
 
 // Import game actions
-import { expand, declareAttack, fortify, giftTile, giftResources } from '../game/actions.js';
+import { expand, declareAttack, fortify, giftTile, giftResources, setCapital } from '../game/actions.js';
 import { 
   sendMessage, 
   markMessagesRead,
@@ -175,6 +175,14 @@ router.post('/:id/action', (req: Request, res: Response) => {
 
     case 'wait':
       result = { success: true, message: 'Waited. No action taken.' };
+      break;
+
+    case 'set_capital':
+      if (typeof action.target_q !== 'number' || typeof action.target_r !== 'number') {
+        res.status(400).json({ error: 'set_capital requires target_q and target_r (numbers)' });
+        return;
+      }
+      result = setCapital(agent, action.target_q, action.target_r);
       break;
 
     default:

@@ -14,6 +14,7 @@ import type { Agent, Tile, Attack, GameState, TerrainType } from '../types.js';
 import { GAME_CONSTANTS } from '../types.js';
 import { broadcastGameEvent, broadcastTileUpdate } from '../game/broadcast.js';
 import { notifyTerritoryLost } from '../webhooks/notify.js';
+import { clearCapitalIfLost } from '../game/actions.js';
 
 // =============================================================================
 // TYPES
@@ -183,6 +184,7 @@ export function processTick(): TickResult {
         
         // Notify defender they lost territory (async)
         if (previousOwner) {
+          clearCapitalIfLost(previousOwner, attack.target_q, attack.target_r);
           notifyTerritoryLost(previousOwner, attackerName, attack.target_q, attack.target_r)
             .catch(err => console.error('[Webhook] Failed to notify territory loss:', err));
         }
@@ -298,6 +300,9 @@ export function processTick(): TickResult {
             // Remove ownership
             db.prepare('UPDATE tiles SET owner_id = NULL, fortification = 0 WHERE q = ? AND r = ?')
               .run(tileToLose.q, tileToLose.r);
+
+            // Clear capital if this was the capital tile
+            clearCapitalIfLost(agent.id, tileToLose.q, tileToLose.r);
             
             // Log event
             logEvent(agent.id, 'starvation', 

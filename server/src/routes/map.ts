@@ -4,13 +4,14 @@ import type { Tile, GameState } from '../types.js';
 
 const router = Router();
 
-interface MapTileResponse {
+interface MapTileRow {
   q: number;
   r: number;
   terrain: string;
   owner_id: string | null;
   owner_name: string | null;
   fortification: number;
+  is_capital: number;
 }
 
 // GET /api/map - Get public map state (all tiles)
@@ -22,11 +23,12 @@ router.get('/', (req: Request, res: Response) => {
       t.terrain,
       t.owner_id,
       t.fortification,
-      a.display_name as owner_name
+      a.display_name as owner_name,
+      CASE WHEN a.capital_q = t.q AND a.capital_r = t.r THEN 1 ELSE 0 END as is_capital
     FROM tiles t
     LEFT JOIN agents a ON t.owner_id = a.id
     ORDER BY t.q, t.r
-  `).all() as MapTileResponse[];
+  `).all() as MapTileRow[];
 
   // For public view, hide tile types of unclaimed tiles (fog of war)
   // Only show terrain for claimed territories
@@ -37,6 +39,7 @@ router.get('/', (req: Request, res: Response) => {
     owner_id: tile.owner_id,
     owner_name: tile.owner_name,
     fortification: tile.fortification,
+    is_capital: tile.is_capital === 1,
   }));
 
   res.json(publicTiles);
