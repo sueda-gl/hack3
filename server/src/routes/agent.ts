@@ -51,7 +51,7 @@ function getAgentById(id: string): Agent | null {
 
 router.post('/join', (req: Request, res: Response) => {
   const body = req.body as JoinRequest;
-  const { agent_id, display_name, webhook_url, webhook_token, custom_strategy } = body;
+  const { agent_id, display_name, webhook_url, webhook_token, custom_strategy, dashboard_chat_enabled } = body;
 
   // Validate agent_id
   if (!agent_id || typeof agent_id !== 'string' || agent_id.trim().length < 2) {
@@ -93,9 +93,9 @@ router.post('/join', (req: Request, res: Response) => {
     const joinTransaction = db.transaction(() => {
       // Insert agent
       db.prepare(`
-        INSERT INTO agents (id, display_name, food, metal, webhook_url, webhook_token, custom_strategy)
-        VALUES (?, ?, 100, 50, ?, ?, ?)
-      `).run(trimmedId, trimmedName, webhook_url || null, webhook_token || null, custom_strategy || null);
+        INSERT INTO agents (id, display_name, food, metal, webhook_url, webhook_token, custom_strategy, dashboard_chat_enabled)
+        VALUES (?, ?, 100, 50, ?, ?, ?, ?)
+      `).run(trimmedId, trimmedName, webhook_url || null, webhook_token || null, custom_strategy || null, dashboard_chat_enabled ? 1 : 0);
 
       // Create empty memory for agent
       db.prepare(`
@@ -267,6 +267,7 @@ router.get('/:id/world', (req: Request, res: Response) => {
       capital: agent.capital_q !== null && agent.capital_r !== null
         ? { q: agent.capital_q, r: agent.capital_r }
         : null,
+      dashboard_chat_enabled: Boolean(agent.dashboard_chat_enabled),
     },
     territories,
     visible_tiles: visibleTiles,

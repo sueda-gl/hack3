@@ -209,7 +209,13 @@ export function declareAttack(agent: Agent, targetQ: number, targetR: number, co
   }
   
   // Calculate when attack resolves (next tick or 2 hours from now)
-  const resolvesAt = new Date(Date.now() + GAME_CONSTANTS.ATTACK_RESOLUTION_HOURS * 60 * 60 * 1000).toISOString();
+  // IMPORTANT: Use SQLite-compatible format (space separator, no Z) so that
+  // the string comparison in getPendingAttacksToResolve() works correctly.
+  // SQLite's datetime('now') returns 'YYYY-MM-DD HH:MM:SS' format, and
+  // JavaScript's toISOString() returns 'YYYY-MM-DDTHH:MM:SS.sssZ' which
+  // breaks lexicographic <= comparison (T > space in ASCII).
+  const resolvesAt = new Date(Date.now() + GAME_CONSTANTS.ATTACK_RESOLUTION_HOURS * 60 * 60 * 1000)
+    .toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
   
   // Execute attack declaration
   const executeAttackDeclaration = db.transaction(() => {

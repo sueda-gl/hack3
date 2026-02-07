@@ -108,10 +108,10 @@ async function loadMapFromServer() {
         if (!introFlightDone) {
             introFlightDone = true;
             
-            // Wait for tiles to start spawning in before flying
+            // Wait for tile spawn animation to complete before flying
             setTimeout(() => {
                 triggerIntroFlyover();
-            }, 800);
+            }, 1400);
         }
         
     } catch (error) {
@@ -180,12 +180,12 @@ function triggerIntroFlyover() {
         targetLookAt.z + camDir.z * 7
     );
     
-    // Fly with 180-degree (Math.PI) orbit around the capital
-    flyCamera(targetPosition, targetLookAt, 4000, () => {
-        // Reset orbit pivot to map center so zooming out shows the full map normally
-        setOrbitTarget(0, 0, 0);
+    // Fly with orbit, lookAt smoothly transitions: map center → capital → map center
+    // No jarring re-center needed — the orbit target naturally arrives at (0,0,0)
+    const endLookAt = new THREE.Vector3(0, 0, 0);
+    flyCamera(targetPosition, targetLookAt, 5000, () => {
         console.log('Intro flyover complete - controls enabled');
-    }, Math.PI);
+    }, Math.PI, endLookAt);
 }
 
 /**

@@ -332,18 +332,25 @@ let orbitRetarget = null; // Smooth post-flight orbit target transition
  * @param {Function} onComplete - Callback when flight completes
  * @param {number} orbitAngle - Minimum radians to orbit (0 = straight line, Math.PI = at least 180°)
  */
-export function flyCamera(targetPosition, targetLookAt, duration = 3000, onComplete = null, orbitAngle = 0) {
+export function flyCamera(targetPosition, targetLookAt, duration = 3000, onComplete = null, orbitAngle = 0, endLookAt = null) {
     const startPos = camera.position.clone();
     const lookAt = targetLookAt.clone();
+    const finalLookAt = endLookAt ? endLookAt.clone() : null;
     
-    // Calculate start orbital parameters relative to lookAt
-    const startOffset = new THREE.Vector3().subVectors(startPos, lookAt);
+    // When endLookAt is provided, orbital offsets are relative to start/end lookAt anchors
+    // so the orbit center can move smoothly. When not provided, both offsets are relative
+    // to targetLookAt (original behavior with fixed orbit center).
+    const startAnchor = finalLookAt ? controls.target.clone() : lookAt;
+    const endAnchor = finalLookAt || lookAt;
+    
+    // Calculate start orbital parameters
+    const startOffset = new THREE.Vector3().subVectors(startPos, startAnchor);
     const startDistance = Math.sqrt(startOffset.x * startOffset.x + startOffset.z * startOffset.z);
     const startHeight = startOffset.y;
     const startAngle = Math.atan2(startOffset.x, startOffset.z);
     
-    // Calculate end orbital parameters from targetPosition
-    const endOffset = new THREE.Vector3().subVectors(targetPosition, lookAt);
+    // Calculate end orbital parameters
+    const endOffset = new THREE.Vector3().subVectors(targetPosition, endAnchor);
     const endDistance = Math.sqrt(endOffset.x * endOffset.x + endOffset.z * endOffset.z);
     const endHeight = endOffset.y;
     const endAngle = Math.atan2(endOffset.x, endOffset.z);
@@ -369,6 +376,7 @@ export function flyCamera(targetPosition, targetLookAt, duration = 3000, onCompl
         startLookAt: controls.target.clone(),
         targetPosition: targetPosition.clone(),
         targetLookAt: lookAt,
+        finalLookAt: finalLookAt,
         startTime: Date.now(),
         duration,
         onComplete,
@@ -397,8 +405,32 @@ function updateCameraFlight() {
         ? 4 * t * t * t
         : 1 - Math.pow(-2 * t + 2, 3) / 2;
     
-    if (cameraFlight.totalRotation !== 0) {
-        // Orbital flight: camera orbits around lookAt point
+    if (cameraFlight.finalLookAt && cameraFlight.totalRotation !== 0) {
+        // Moving lookAt orbital flight:
+        // LookAt transitions smoothly: startLookAt → targetLookAt (midpoint) → finalLookAt
+        // Camera orbits with offset relative to the moving lookAt center
+        const currentLookAt = new THREE.Vector3();
+        if (t <= 0.5) {
+            const phase = t / 0.5;
+            currentLookAt.lerpVectors(cameraFlight.startLookAt, cameraFlight.targetLookAt, phase);
+        } else {
+            const phase = (t - 0.5) / 0.5;
+            currentLookAt.lerpVectors(cameraFlight.targetLookAt, cameraFlight.finalLookAt, phase);
+        }
+        controls.target.copy(currentLookAt);
+        
+        // Camera position: orbital offset from the current (moving) lookAt
+        const angle = cameraFlight.startAngle + t * cameraFlight.totalRotation;
+        const distance = cameraFlight.startDistance + t * (cameraFlight.endDistance - cameraFlight.startDistance);
+        const height = cameraFlight.startHeight + t * (cameraFlight.endHeight - cameraFlight.startHeight);
+        
+        camera.position.set(
+            currentLookAt.x + distance * Math.sin(angle),
+            currentLookAt.y + height,
+            currentLookAt.z + distance * Math.cos(angle)
+        );
+    } else if (cameraFlight.totalRotation !== 0) {
+        // Fixed lookAt orbital flight (original behavior)
         const angle = cameraFlight.startAngle + t * cameraFlight.totalRotation;
         const distance = cameraFlight.startDistance + t * (cameraFlight.endDistance - cameraFlight.startDistance);
         const height = cameraFlight.startHeight + t * (cameraFlight.endHeight - cameraFlight.startHeight);
@@ -421,7 +453,7 @@ function updateCameraFlight() {
     if (elapsed >= cameraFlight.duration) {
         // Flight complete - snap to exact target
         camera.position.copy(cameraFlight.targetPosition);
-        controls.target.copy(cameraFlight.targetLookAt);
+        controls.target.copy(cameraFlight.finalLookAt || cameraFlight.targetLookAt);
         
         const cb = cameraFlight.onComplete;
         cameraFlight = null;
@@ -485,7 +517,7 @@ fillLight.position.set(-10, 10, -10);
 scene.add(fillLight);
 
 // Point light for the glowing center
-const centerGlow = new THREE.PointLight(0x00e5cc, 1.5, 8);
+const centerGlow = new THREE.PointLight(0x00e5cc, 0.5, 8);
 centerGlow.position.set(0, 2, 0);
 scene.add(centerGlow);
 
@@ -1147,7 +1179,7 @@ export function startAnimationLoop() {
         time += 0.02;
         
         // Pulse the center glow
-        centerGlow.intensity = 1.2 + Math.sin(time * 2) * 0.4;
+        centerGlow.intensity = 0.4 + Math.sin(time * 2) * 0.15;
         
         // Animate Hex Spawning & Grid Pulse
         const now = Date.now();
@@ -1173,7 +1205,7 @@ export function startAnimationLoop() {
             if (hex.scale.x < 1) {
                 const delay = hex.userData.spawnDelay || 0;
                 if (now - hex.userData.spawnTime > delay) {
-                    const speed = 0.1;
+                    const speed = 0.06; // Balanced speed for visible but snappy animation
                     hex.scale.x = Math.min(1, hex.scale.x + speed);
                     hex.scale.y = Math.min(1, hex.scale.y + speed);
                     hex.scale.z = Math.min(1, hex.scale.z + speed);

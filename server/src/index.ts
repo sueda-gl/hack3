@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import agentRoutes from './routes/agent.js';
 import mapRoutes from './routes/map.js';
 import actionRoutes from './routes/actions.js';
+import dashboardRoutes from './routes/dashboard.js';
 
 // Import database to initialize it
 import './db/database.js';
@@ -90,6 +91,7 @@ app.use((req, res, next) => {
 app.use('/api/agent', agentRoutes);
 app.use('/api/map', mapRoutes);
 app.use('/api/action', actionRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -184,6 +186,12 @@ server.listen(PORT, () => {
   ║   - POST /api/action/:id/action  Submit action                ║
   ║   - GET  /api/map                Get public map               ║
   ║   - GET  /api/map/stats          Get game stats               ║
+  ║                                                               ║
+  ║   Dashboard Chat (opt-in):                                    ║
+  ║   - POST /api/dashboard/:id/send    Human sends message       ║
+  ║   - GET  /api/dashboard/:id/pending Agent fetches messages    ║
+  ║   - POST /api/dashboard/:id/reply   Agent replies             ║
+  ║   - GET  /api/dashboard/:id/history Get chat history          ║
   ║                                                               ║
   ║   Admin Endpoints:                                            ║
   ║   - GET  /api/admin/tick/status  Get tick scheduler status    ║

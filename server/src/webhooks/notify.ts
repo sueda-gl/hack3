@@ -20,6 +20,9 @@
 import db from '../db/database.js';
 import { GAME_CONSTANTS, type Agent, type WebhookEventType } from '../types.js';
 
+// Base URL for API references in webhook messages
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+
 // =============================================================================
 // RATE LIMITING
 // =============================================================================
@@ -171,7 +174,7 @@ The attack will resolve at ${resolvesAt}.
 You have time to fortify this tile to increase your defense. Current base defense is 10 + any existing fortification.
 
 To respond:
-1. Check your world state: GET /api/agent/${defenderId}/world
+1. Check your world state: GET ${BASE_URL}/api/agent/${defenderId}/world
 2. Fortify the tile if needed
 3. Consider messaging ${attackerName} to negotiate
 
@@ -197,7 +200,7 @@ export async function notifyMessageReceived(
 
 "${preview}"
 
-Check your world state to see full message and respond: GET /api/agent/${recipientId}/world`;
+Check your world state to see full message and respond: GET ${BASE_URL}/api/agent/${recipientId}/world`;
 
   return notifyAgent(recipientId, 'message_received', message);
 }
@@ -218,7 +221,7 @@ export async function notifyTradeProposed(
 They offer: ${offerFood} food, ${offerMetal} metal
 They request: ${requestFood} food, ${requestMetal} metal
 
-Check your world state to accept or reject: GET /api/agent/${recipientId}/world`;
+Check your world state to accept or reject: GET ${BASE_URL}/api/agent/${recipientId}/world`;
 
   return notifyAgent(recipientId, 'trade_proposed', message);
 }
@@ -236,7 +239,7 @@ export async function notifyTerritoryLost(
 
 ${attackerName} has successfully captured your tile at (${tileQ}, ${tileR}).
 
-Check your world state to assess the situation: GET /api/agent/${defenderId}/world`;
+Check your world state to assess the situation: GET ${BASE_URL}/api/agent/${defenderId}/world`;
 
   return notifyAgent(defenderId, 'territory_lost', message);
 }
@@ -252,9 +255,34 @@ export async function notifyTradeAccepted(
 
 ${accepterName} has accepted your trade proposal. Resources have been exchanged.
 
-Check your world state to see updated resources: GET /api/agent/${proposerId}/world`;
+Check your world state to see updated resources: GET ${BASE_URL}/api/agent/${proposerId}/world`;
 
   return notifyAgent(proposerId, 'trade_accepted', message);
+}
+
+/**
+ * Notify agent they have a new dashboard message from a human
+ */
+export async function notifyDashboardMessage(
+  agentId: string,
+  messagePreview: string
+): Promise<NotifyResult> {
+  // Truncate long messages
+  const preview = messagePreview.length > 200 
+    ? messagePreview.substring(0, 200) + '...'
+    : messagePreview;
+
+  const message = `💬 CONQUEST: New command from your human operator!
+
+"${preview}"
+
+To respond:
+1. Fetch pending messages: GET ${BASE_URL}/api/dashboard/${agentId}/pending
+2. Process and reply: POST ${BASE_URL}/api/dashboard/${agentId}/reply with { "content": "Your response" }
+
+The human is waiting for your response via the CONQUEST dashboard.`;
+
+  return notifyAgent(agentId, 'dashboard_message', message);
 }
 
 // =============================================================================

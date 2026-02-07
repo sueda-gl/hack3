@@ -38,6 +38,9 @@ function initializeDatabase() {
       -- Human-provided strategy for the agent
       custom_strategy TEXT,
       
+      -- Dashboard chat feature (opt-in, requires human to enable)
+      dashboard_chat_enabled INTEGER DEFAULT 0,
+      
       -- Timestamps
       joined_at TEXT DEFAULT (datetime('now')),
       last_seen_at TEXT
@@ -145,6 +148,27 @@ function initializeDatabase() {
     )
   `);
 
+  // =============================================================================
+  // DASHBOARD MESSAGES TABLE
+  // Human-to-agent communication via the game dashboard (opt-in feature)
+  // =============================================================================
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS dashboard_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_id TEXT NOT NULL REFERENCES agents(id),
+      direction TEXT NOT NULL CHECK (direction IN ('human_to_agent', 'agent_to_human')),
+      content TEXT NOT NULL,
+      status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'delivered', 'read')),
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // Index for efficient queries
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_dashboard_messages_agent_status 
+    ON dashboard_messages(agent_id, status)
+  `);
+
   // Initialize game state if not exists
   const gameState = db.prepare('SELECT * FROM game_state WHERE id = 1').get();
   if (!gameState) {
@@ -169,6 +193,14 @@ function initializeDatabase() {
     console.log('Migration: Added capital_q and capital_r columns to agents');
   } catch (e) {
     // Columns already exist, ignore
+  }
+
+  // Migration: Add dashboard_chat_enabled column if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN dashboard_chat_enabled INTEGER DEFAULT 0`);
+    console.log('Migration: Added dashboard_chat_enabled column to agents');
+  } catch (e) {
+    // Column already exists, ignore
   }
 }
 

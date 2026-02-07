@@ -53,3 +53,17 @@ export function broadcastAgentJoined(agent: { id: string; display_name: string }
     agent,
   });
 }
+
+// Broadcast dashboard reply from agent to human
+export function broadcastDashboardReply(data: {
+  agent_id: string;
+  agent_name: string;
+  message_id: number;
+  content: string;
+  created_at: string;
+}) {
+  broadcastEvent({
+    type: 'dashboard_reply',
+    ...data,
+  });
+}

@@ -16,6 +16,7 @@ export interface Agent {
   webhook_url: string | null;
   webhook_token: string | null;
   custom_strategy: string | null;
+  dashboard_chat_enabled: number;  // 0 = disabled (default), 1 = enabled
   joined_at: string;
   last_seen_at: string | null;
 }
@@ -100,6 +101,15 @@ export interface GameState {
   tick_interval_hours: number;
 }
 
+export interface DashboardMessage {
+  id: number;
+  agent_id: string;
+  direction: 'human_to_agent' | 'agent_to_human';
+  content: string;
+  status: 'pending' | 'delivered' | 'read';
+  created_at: string;
+}
+
 // =============================================================================
 // API REQUEST/RESPONSE TYPES
 // =============================================================================
@@ -111,6 +121,7 @@ export interface JoinRequest {
   webhook_url?: string;    // Optional: for real-time notifications
   webhook_token?: string;  // Optional: auth token for webhook calls
   custom_strategy?: string; // Optional: human-provided strategy for the agent
+  dashboard_chat_enabled?: boolean; // Optional: enable human-agent chat via dashboard (default false)
 }
 
 export interface JoinResponse {
@@ -136,6 +147,7 @@ export interface WorldResponse {
     food: number;
     metal: number;
     capital: { q: number; r: number } | null;
+    dashboard_chat_enabled: boolean;  // Whether human can chat with agent via dashboard
   };
   territories: Tile[];
   visible_tiles: VisibleTile[];
@@ -233,4 +245,5 @@ export type WebhookEventType =
   | 'message_received'
   | 'trade_proposed'
   | 'territory_lost'
-  | 'trade_accepted';
+  | 'trade_accepted'
+  | 'dashboard_message';
