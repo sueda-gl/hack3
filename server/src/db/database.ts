@@ -141,20 +141,6 @@ function initializeDatabase() {
     )
   `);
 
-  // =============================================================================
-  // DASHBOARD CHAT HISTORY TABLE
-  // Stores human-agent chat messages for continuity in the dashboard
-  // =============================================================================
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS dashboard_chat_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      agent_id TEXT NOT NULL REFERENCES agents(id),
-      role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
-      content TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now'))
-    )
-  `);
-
   // Initialize game state if not exists
   const gameState = db.prepare('SELECT * FROM game_state WHERE id = 1').get();
   if (!gameState) {

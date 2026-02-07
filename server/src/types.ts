@@ -98,14 +98,6 @@ export interface GameState {
   tick_interval_hours: number;
 }
 
-export interface DashboardChatMessage {
-  id: number;
-  agent_id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  created_at: string;
-}
-
 // =============================================================================
 // API REQUEST/RESPONSE TYPES
 // =============================================================================

@@ -208,6 +208,15 @@
             font-style: italic;
         }
         
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #4a5568;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+        
         /* Chat Messages */
         #chat-messages {
             flex: 1;
@@ -303,7 +312,7 @@
         .chat-status.connected {
             color: #00e5cc;
         }
-        .chat-status.thinking {
+        .chat-status.waiting {
             color: #f6ad55;
             animation: blink 1s infinite;
         }
@@ -313,15 +322,6 @@
         }
         .chat-status.error {
             color: #e53e6b;
-        }
-        
-        /* Empty state */
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: #4a5568;
-            font-size: 11px;
-            letter-spacing: 1px;
         }
         
         /* Scrollbar styling */
@@ -383,7 +383,7 @@
                     <input type="text" id="chat-input" placeholder="Talk to your agent...">
                     <button id="send-btn">Send</button>
                 </div>
-                <div class="chat-status" id="chat-status">Connecting...</div>
+                <div class="chat-status" id="chat-status">Ready</div>
             </div>
         </div>
     </div>
@@ -396,19 +396,13 @@
         }
     }
     </script>
-    <script type="module" src="main.js"></script>
+    <script type="module" src="js/main.js"></script>
     
     <!-- Panel Script -->
     <script>
         // Get agent ID from URL or default to suclaw
         const urlParams = new URLSearchParams(window.location.search);
         const AGENT_ID = urlParams.get('agent') || 'suclaw';
-        
-        // Agent OpenClaw ports
-        const OPENCLAW_PORTS = {
-            'suclaw': 18789,
-            'maticlaw': 18790
-        };
         
         // Update header with agent name
         document.getElementById('panel-agent-name').textContent = AGENT_ID.toUpperCase();
@@ -506,7 +500,7 @@
         }
         
         // =====================================================
-        // CHAT WITH AGENT (via CONQUEST API proxy)
+        // CHAT WITH AGENT (via webhook + callback system)
         // =====================================================
         
         const chatMessages = document.getElementById('chat-messages');
@@ -527,8 +521,27 @@
             chatStatus.className = 'chat-status ' + className;
         }
         
-        // Set initial status
-        setChatStatus('Ready', 'connected');
+        // Load chat history on startup
+        async function loadChatHistory() {
+            try {
+                const res = await fetch(`/api/dashboard/${AGENT_ID}/history?limit=50`);
+                if (res.ok) {
+                    const data = await res.json();
+                    chatMessages.innerHTML = ''; // Clear
+                    
+                    if (data.messages && data.messages.length > 0) {
+                        data.messages.forEach(msg => {
+                            const type = msg.direction === 'human_to_agent' ? 'human' : 'agent';
+                            addChatMessage(msg.content, type);
+                        });
+                    } else {
+                        addChatMessage('Start a conversation with your agent...', 'system');
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load chat history:', e);
+            }
+        }
         
         async function sendChatMessage() {
             const text = chatInput.value.trim();
@@ -537,10 +550,10 @@
             addChatMessage(text, 'human');
             chatInput.value = '';
             sendBtn.disabled = true;
-            setChatStatus('Agent is thinking...', 'thinking');
+            setChatStatus('Waking agent...', 'waiting');
             
             try {
-                const res = await fetch(`/api/agent/${AGENT_ID}/command`, {
+                const res = await fetch(`/api/dashboard/${AGENT_ID}/send`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message: text })
@@ -548,19 +561,18 @@
                 
                 const data = await res.json();
                 
-                if (res.ok && data.reply) {
-                    // Display the agent's actual reply!
-                    addChatMessage(data.reply, 'agent');
-                    setChatStatus('Ready', 'connected');
+                if (res.ok && data.success) {
+                    setChatStatus('Waiting for agent response...', 'waiting');
+                    // Agent will reply via WebSocket - see listener below
                 } else {
-                    addChatMessage(`Error: ${data.error || 'Failed to get response'}`, 'system');
+                    addChatMessage(`Error: ${data.error || 'Failed to send'}`, 'system');
                     setChatStatus('Error - try again', 'error');
+                    sendBtn.disabled = false;
                 }
             } catch (e) {
                 console.error('Chat failed:', e);
                 addChatMessage('Error: Could not reach server', 'system');
                 setChatStatus('Connection error', 'error');
-            } finally {
                 sendBtn.disabled = false;
             }
         }
@@ -585,9 +597,20 @@
             }
         });
         
+        // Listen for dashboard replies from agent
+        window.addEventListener('conquest-dashboard-reply', (e) => {
+            const data = e.detail;
+            if (data.agent_id === AGENT_ID) {
+                addChatMessage(data.content, 'agent');
+                setChatStatus('Ready', 'connected');
+                sendBtn.disabled = false;
+            }
+        });
+        
         // Initial load
         loadAgentData();
         loadMessages();
+        loadChatHistory();
         
         // Refresh data periodically
         setInterval(loadAgentData, 30000);
