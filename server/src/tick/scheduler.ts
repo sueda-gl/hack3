@@ -1,5 +1,5 @@
 /**
- * CONQUEST Tick Scheduler
+ * CLAWQUEST Tick Scheduler
  * 
  * Runs the game tick processor at regular intervals.
  * Default: every 2 hours (configurable in game_state table)

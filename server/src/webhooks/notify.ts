@@ -1,5 +1,5 @@
 /**
- * CONQUEST Webhook Notification System
+ * CLAWQUEST Webhook Notification System
  * 
  * Sends notifications to OpenClaw agents via their webhook endpoints.
  * Uses the /hooks/agent endpoint format from OpenClaw's webhook system.
@@ -7,8 +7,8 @@
  * OpenClaw webhook format (POST /hooks/agent):
  * {
  *   "message": "The prompt for the agent",
- *   "name": "CONQUEST",              // Shows in system events
- *   "sessionKey": "conquest:game",   // Consistent key for game context
+ *   "name": "CLAWQUEST",              // Shows in system events
+ *   "sessionKey": "clawquest:game",   // Consistent key for game context
  *   "wakeMode": "now"                // Triggers immediate heartbeat
  * }
  * 
@@ -105,8 +105,8 @@ export async function notifyAgent(
   // Build payload according to OpenClaw format
   const payload = {
     message: message,
-    name: 'CONQUEST',
-    sessionKey: `conquest:${agentId}`,  // Consistent session key per agent
+    name: 'CLAWQUEST',
+    sessionKey: `clawquest:${agentId}`,  // Consistent session key per agent
     wakeMode: 'now' as const,            // Trigger immediate heartbeat
   };
   
@@ -165,7 +165,7 @@ export async function notifyAttackIncoming(
   commitment: number,
   resolvesAt: string
 ): Promise<NotifyResult> {
-  const message = `🚨 CONQUEST ALERT: You are under attack!
+  const message = `🚨 CLAWQUEST ALERT: You are under attack!
 
 ${attackerName} has declared an attack on your tile at (${tileQ}, ${tileR}) with ${commitment} metal commitment.
 
@@ -196,7 +196,7 @@ export async function notifyMessageReceived(
     ? messagePreview.substring(0, 200) + '...'
     : messagePreview;
     
-  const message = `📬 CONQUEST: New message from ${senderName}
+  const message = `📬 CLAWQUEST: New message from ${senderName}
 
 "${preview}"
 
@@ -216,7 +216,7 @@ export async function notifyTradeProposed(
   requestFood: number,
   requestMetal: number
 ): Promise<NotifyResult> {
-  const message = `💱 CONQUEST: Trade proposal from ${proposerName}
+  const message = `💱 CLAWQUEST: Trade proposal from ${proposerName}
 
 They offer: ${offerFood} food, ${offerMetal} metal
 They request: ${requestFood} food, ${requestMetal} metal
@@ -235,7 +235,7 @@ export async function notifyTerritoryLost(
   tileQ: number,
   tileR: number
 ): Promise<NotifyResult> {
-  const message = `⚔️ CONQUEST: Territory lost!
+  const message = `⚔️ CLAWQUEST: Territory lost!
 
 ${attackerName} has successfully captured your tile at (${tileQ}, ${tileR}).
 
@@ -251,7 +251,7 @@ export async function notifyTradeAccepted(
   proposerId: string,
   accepterName: string
 ): Promise<NotifyResult> {
-  const message = `✅ CONQUEST: Trade accepted!
+  const message = `✅ CLAWQUEST: Trade accepted!
 
 ${accepterName} has accepted your trade proposal. Resources have been exchanged.
 
@@ -272,7 +272,7 @@ export async function notifyDashboardMessage(
     ? messagePreview.substring(0, 200) + '...'
     : messagePreview;
 
-  const message = `💬 CONQUEST: New command from your human operator!
+  const message = `💬 CLAWQUEST: New command from your human operator!
 
 "${preview}"
 

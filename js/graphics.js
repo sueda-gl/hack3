@@ -1,5 +1,5 @@
 /**
- * CONQUEST - Graphics Module
+ * CLAWQUEST - Graphics Module
  * 
  * Handles all Three.js rendering:
  * - Scene, camera, renderer, controls
@@ -318,6 +318,61 @@ controls.rotateSpeed = 1.0;  // Normal rotation
 controls.enabled = false; // Disabled until intro flyover completes
 
 // =============================================================================
+// CAMERA SHAKE SYSTEM
+// =============================================================================
+
+let cameraShake = null; // Active shake animation
+
+/**
+ * Trigger a camera shake effect (e.g. on attack impact).
+ * @param {number} intensity - Max pixel offset (default 0.3)
+ * @param {number} duration - Duration in ms (default 600)
+ * @param {number} frequency - Shakes per second (default 30)
+ */
+function triggerCameraShake(intensity = 0.3, duration = 600, frequency = 30) {
+    cameraShake = {
+        startTime: Date.now(),
+        duration,
+        intensity,
+        frequency,
+        originalPos: camera.position.clone()
+    };
+}
+
+/**
+ * Update camera shake each frame. Called from animation loop.
+ */
+function updateCameraShake() {
+    if (!cameraShake) return;
+
+    const elapsed = Date.now() - cameraShake.startTime;
+    const t = elapsed / cameraShake.duration;
+
+    if (t >= 1.0) {
+        // Restore original position and stop
+        camera.position.copy(cameraShake.originalPos);
+        cameraShake = null;
+        return;
+    }
+
+    // Decay envelope: strong at start, fades out
+    const decay = 1 - t;
+    const amp = cameraShake.intensity * decay * decay;
+
+    // High-frequency noise shake
+    const freq = cameraShake.frequency;
+    const time = elapsed * 0.001;
+    const offsetX = amp * (Math.sin(time * freq * 6.28) * 0.7 + Math.sin(time * freq * 4.13) * 0.3);
+    const offsetY = amp * (Math.cos(time * freq * 5.17) * 0.6 + Math.cos(time * freq * 3.71) * 0.4);
+    const offsetZ = amp * (Math.sin(time * freq * 4.53) * 0.5);
+
+    camera.position.copy(cameraShake.originalPos);
+    camera.position.x += offsetX;
+    camera.position.y += offsetY;
+    camera.position.z += offsetZ;
+}
+
+// =============================================================================
 // CAMERA FLYOVER SYSTEM
 // =============================================================================
 
@@ -619,6 +674,354 @@ export function triggerClaimEffect(hex, claimColor) {
     });
 }
 
+// =============================================================================
+// TRADE ROUTE EFFECT
+// =============================================================================
+
+/**
+ * Generate a great-circle curve along the planet surface between two positions.
+ * Returns a THREE.CatmullRomCurve3 that hugs the globe.
+ * @param {THREE.Vector3} from - Start position (on planet surface)
+ * @param {THREE.Vector3} to - End position (on planet surface)
+ * @param {number} [liftHeight=1.5] - How far above the surface the arc floats
+ * @param {number} [segments=60] - Number of interpolation points
+ * @returns {THREE.CatmullRomCurve3}
+ */
+function createSurfaceCurve(from, to, liftHeight = 1.5, segments = 60) {
+    const points = [];
+    const fromDir = new THREE.Vector3().subVectors(from, PLANET_CENTER).normalize();
+    const toDir = new THREE.Vector3().subVectors(to, PLANET_CENTER).normalize();
+
+    for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        // Slerp along the sphere surface
+        const dir = new THREE.Vector3().copy(fromDir).lerp(toDir, t).normalize();
+        // Lift above surface: higher at midpoint, lower at endpoints
+        const archLift = Math.sin(t * Math.PI) * liftHeight;
+        const point = new THREE.Vector3()
+            .copy(PLANET_CENTER)
+            .addScaledVector(dir, PLANET_RADIUS + archLift);
+        points.push(point);
+    }
+    return new THREE.CatmullRomCurve3(points);
+}
+
+/**
+ * Trigger a trade route animation: a glowing wire traces across the globe
+ * between two hexes, then energy pulses travel along it.
+ * @param {THREE.Group} fromHex - Source hex tile
+ * @param {THREE.Group} toHex - Destination hex tile
+ * @param {number} [tradeColor=0xdd8844] - Color of the trade wire (amber)
+ */
+export function triggerTradeRoute(fromHex, toHex, tradeColor) {
+    if (!fromHex || !toHex) return;
+    const color = tradeColor || 0x00e5cc;
+
+    // --- Build the surface-following curve ---
+    const curve = createSurfaceCurve(fromHex.position, toHex.position, 1.8, 80);
+
+    // --- Wire tube (initially hidden via drawRange) ---
+    const tubeSegments = 120;
+    const tubeGeo = new THREE.TubeGeometry(curve, tubeSegments, 0.02, 6, false);
+    const tubeMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.85,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide
+    });
+    const tube = new THREE.Mesh(tubeGeo, tubeMat);
+    // Start fully hidden — we'll reveal via drawRange
+    tube.geometry.setDrawRange(0, 0);
+    scene.add(tube);
+
+    // --- Outer glow tube (wider, softer) ---
+    const glowGeo = new THREE.TubeGeometry(curve, tubeSegments, 0.06, 6, false);
+    const glowMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.25,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide
+    });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.geometry.setDrawRange(0, 0);
+    scene.add(glow);
+
+    // --- Energy pulse spheres (travel along the wire once it's drawn) ---
+    const pulseCount = 3;
+    const pulses = [];
+    const pulseGeo = new THREE.SphereGeometry(0.10, 8, 8);
+    for (let i = 0; i < pulseCount; i++) {
+        const pulseMat = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        const pulse = new THREE.Mesh(pulseGeo, pulseMat);
+        pulse.visible = false;
+        scene.add(pulse);
+        pulses.push(pulse);
+    }
+
+    // --- Endpoint markers (glow rings at source and destination) ---
+    const ringGeo = new THREE.TorusGeometry(0.5, 0.08, 8, 24);
+    const fromRingMat = new THREE.MeshBasicMaterial({
+        color: color, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const toRingMat = new THREE.MeshBasicMaterial({
+        color: color, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const fromRing = new THREE.Mesh(ringGeo, fromRingMat);
+    const toRing = new THREE.Mesh(ringGeo, toRingMat);
+
+    // Orient rings to planet surface at each endpoint
+    fromRing.position.copy(fromHex.position);
+    fromRing.quaternion.copy(fromHex.quaternion);
+    toRing.position.copy(toHex.position);
+    toRing.quaternion.copy(toHex.quaternion);
+    // Lift slightly above tile
+    const fromNorm = getPlanetNormal(fromHex.position);
+    const toNorm = getPlanetNormal(toHex.position);
+    fromRing.position.addScaledVector(fromNorm, HEIGHT_CLAIMED + 0.2);
+    toRing.position.addScaledVector(toNorm, HEIGHT_CLAIMED + 0.2);
+
+    scene.add(fromRing);
+    scene.add(toRing);
+
+    // Total index count for the tube geometry
+    const totalIndices = tubeGeo.index ? tubeGeo.index.count : tubeGeo.attributes.position.count;
+
+    activeEffects.push({
+        type: 'trade_route',
+        tube, glow, pulses, curve,
+        fromRing, toRing,
+        totalIndices,
+        startTime: Date.now(),
+        // Phase 1: trace-on 2s, Phase 2: pulses 3s, Phase 3: fade 1.5s
+        duration: 6500,
+    });
+}
+
+// =============================================================================
+// ATTACK EFFECT
+// =============================================================================
+
+/**
+ * Trigger an orbital strike attack animation: a projectile arcs high above
+ * the globe from attacker to target, then impacts with a shockwave.
+ * @param {THREE.Group} fromHex - Attacker hex tile
+ * @param {THREE.Group} toHex - Target hex tile
+ * @param {number} [attackColor=0xe53e6b] - Color of the attack (red/pink)
+ * @param {boolean} [success=true] - Whether the attack succeeded
+ */
+export function triggerAttackEffect(fromHex, toHex, attackColor, success) {
+    if (!fromHex || !toHex) return;
+    const color = attackColor || 0xe53e6b;
+    const isSuccess = success !== undefined ? success : true;
+
+    // --- Compute the high parabolic arc ---
+    const fromPos = fromHex.position.clone();
+    const toPos = toHex.position.clone();
+    const fromDir = new THREE.Vector3().subVectors(fromPos, PLANET_CENTER).normalize();
+    const toDir = new THREE.Vector3().subVectors(toPos, PLANET_CENTER).normalize();
+    const midDir = new THREE.Vector3().addVectors(fromDir, toDir).normalize();
+
+    // Apex: push midpoint high above the globe
+    const apexHeight = 14;
+    const apex = new THREE.Vector3()
+        .copy(PLANET_CENTER)
+        .addScaledVector(midDir, PLANET_RADIUS + apexHeight);
+
+    const startNorm = getPlanetNormal(fromPos);
+    const impactNorm = getPlanetNormal(toPos);
+    const fromLift = fromPos.clone().addScaledVector(startNorm, HEIGHT_CLAIMED);
+    const toLift = toPos.clone().addScaledVector(impactNorm, HEIGHT_CLAIMED);
+
+    // --- Warning laser line (flickers from attacker to target before launch) ---
+    const laserGeo = new THREE.BufferGeometry().setFromPoints([fromLift, toLift]);
+    const laserMat = new THREE.LineBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        linewidth: 2
+    });
+    const warningLaser = new THREE.Line(laserGeo, laserMat);
+    scene.add(warningLaser);
+
+    // --- Charge-up glow at source (pulsing sphere) ---
+    const chargeGeo = new THREE.SphereGeometry(0.6, 12, 12);
+    const chargeMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+    const chargeGlow = new THREE.Mesh(chargeGeo, chargeMat);
+    chargeGlow.position.copy(fromLift);
+    scene.add(chargeGlow);
+
+    // --- Projectile sphere (bigger, brighter) ---
+    const projGeo = new THREE.SphereGeometry(0.35, 12, 12);
+    const projMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+    const projectile = new THREE.Mesh(projGeo, projMat);
+    projectile.position.copy(fromLift);
+    projectile.visible = false;
+    scene.add(projectile);
+
+    // --- Projectile outer glow (larger) ---
+    const projGlowGeo = new THREE.SphereGeometry(0.7, 8, 8);
+    const projGlowMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+    const projGlow = new THREE.Mesh(projGlowGeo, projGlowMat);
+    projGlow.position.copy(fromLift);
+    projGlow.visible = false;
+    scene.add(projGlow);
+
+    // --- Comet trail particles (more, brighter) ---
+    const trailCount = 18;
+    const trailPositions = new Float32Array(trailCount * 3);
+    for (let i = 0; i < trailCount; i++) {
+        trailPositions[i * 3] = fromLift.x;
+        trailPositions[i * 3 + 1] = fromLift.y;
+        trailPositions[i * 3 + 2] = fromLift.z;
+    }
+    const trailGeo = new THREE.BufferGeometry();
+    trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+    const trailMat = new THREE.PointsMaterial({
+        color: color,
+        size: 0.45,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        sizeAttenuation: true
+    });
+    const trail = new THREE.Points(trailGeo, trailMat);
+    trail.visible = false;
+    scene.add(trail);
+
+    // --- Impact shockwave ring (bigger) ---
+    const shockGeo = new THREE.TorusGeometry(0.4, 0.15, 8, 32);
+    const shockMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide
+    });
+    const shockwave = new THREE.Mesh(shockGeo, shockMat);
+    shockwave.position.copy(toLift);
+    shockwave.quaternion.copy(toHex.quaternion);
+    shockwave.position.addScaledVector(impactNorm, 0.1);
+    shockwave.visible = false;
+    scene.add(shockwave);
+
+    // --- Impact flash (bigger) ---
+    const flashGeo = new THREE.SphereGeometry(0.6, 12, 12);
+    const flashMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+    const flash = new THREE.Mesh(flashGeo, flashMat);
+    flash.position.copy(shockwave.position);
+    flash.visible = false;
+    scene.add(flash);
+
+    // --- Ember particles (more particles, stronger velocity) ---
+    const emberCount = 35;
+    const emberPositions = new Float32Array(emberCount * 3);
+    const emberVelocities = [];
+    for (let i = 0; i < emberCount; i++) {
+        emberPositions[i * 3] = toLift.x;
+        emberPositions[i * 3 + 1] = toLift.y;
+        emberPositions[i * 3 + 2] = toLift.z;
+        const vel = impactNorm.clone().multiplyScalar(0.04 + Math.random() * 0.08);
+        vel.x += (Math.random() - 0.5) * 0.05;
+        vel.y += (Math.random() - 0.5) * 0.05;
+        vel.z += (Math.random() - 0.5) * 0.05;
+        emberVelocities.push(vel);
+    }
+    const emberGeo = new THREE.BufferGeometry();
+    emberGeo.setAttribute('position', new THREE.BufferAttribute(emberPositions, 3));
+    const emberMat = new THREE.PointsMaterial({
+        color: isSuccess ? color : 0x888888,
+        size: 0.25,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        sizeAttenuation: true
+    });
+    const embers = new THREE.Points(emberGeo, emberMat);
+    embers.visible = false;
+    scene.add(embers);
+
+    // --- Second shockwave ring ---
+    let successRing = null;
+    if (isSuccess) {
+        const srGeo = new THREE.TorusGeometry(0.3, 0.08, 8, 32);
+        const srMat = new THREE.MeshBasicMaterial({
+            color: 0xff4444,
+            transparent: true,
+            opacity: 0,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+        successRing = new THREE.Mesh(srGeo, srMat);
+        successRing.position.copy(shockwave.position);
+        successRing.quaternion.copy(toHex.quaternion);
+        successRing.visible = false;
+        scene.add(successRing);
+    }
+
+    activeEffects.push({
+        type: 'attack_strike',
+        warningLaser, chargeGlow,
+        projectile, projGlow, trail, trailPositions,
+        shockwave, flash, embers, emberVelocities, emberPositions,
+        successRing,
+        fromPos: fromLift,
+        toPos: toLift,
+        apex,
+        isSuccess,
+        targetHex: toHex,
+        shakeTriggered: false,
+        startTime: Date.now(),
+        // Phase 0: charge-up 0.8s, Phase 1: projectile 1.4s, Phase 2: impact 0.6s, Phase 3: aftermath 1.2s
+        duration: 4000,
+    });
+}
+
+// =============================================================================
+// UPDATE ACTIVE EFFECTS (all types)
+// =============================================================================
+
 /**
  * Update all active tile effects. Called from animation loop.
  */
@@ -628,40 +1031,264 @@ function updateActiveEffects() {
         const elapsed = Date.now() - effect.startTime;
         const t = Math.min(elapsed / effect.duration, 1.0);
         
+        // ----- BEACON (expansion) -----
         if (effect.type === 'beacon') {
             if (t < 0.3) {
-                // Phase 1: Beam shoots up fast (0 → 30%)
                 const riseT = t / 0.3;
                 const easedRise = 1 - Math.pow(1 - riseT, 2);
                 effect.beam.scale.set(1, easedRise, 1);
                 effect.glow.scale.set(1, easedRise, 1);
-                // Move beam up as it grows so base stays at tile
-                const yOffset = (easedRise * effect.beamHeight) / 2;
                 effect.beam.scale.y = easedRise;
                 effect.glow.scale.y = easedRise;
             } else if (t < 0.5) {
-                // Phase 2: Hold bright (30% → 50%)
                 effect.beam.scale.set(1, 1, 1);
                 effect.glow.scale.set(1, 1, 1);
-                // Slight pulse
                 const pulseT = (t - 0.3) / 0.2;
                 const pulse = 1 + Math.sin(pulseT * Math.PI * 2) * 0.15;
                 effect.beam.scale.set(pulse, 1, pulse);
                 effect.glow.scale.set(pulse * 1.2, 1, pulse * 1.2);
             } else {
-                // Phase 3: Fade out and thin (50% → 100%)
                 const fadeT = (t - 0.5) / 0.5;
-                const easedFade = fadeT * fadeT; // ease-in for snappy disappear
+                const easedFade = fadeT * fadeT;
                 effect.beam.material.opacity = 0.9 * (1 - easedFade);
                 effect.glow.material.opacity = 0.3 * (1 - easedFade);
-                // Thin out
                 const thin = 1 - easedFade * 0.7;
                 effect.beam.scale.set(thin, 1, thin);
                 effect.glow.scale.set(thin, 1, thin);
             }
         }
+
+        // ----- TRADE ROUTE -----
+        if (effect.type === 'trade_route') {
+            // Phase timings (fractions of total duration 6500ms):
+            // Trace-on: 0% – 30%  (~2s)
+            // Pulses:   30% – 77% (~3s)
+            // Fade:     77% – 100% (~1.5s)
+
+            if (t < 0.30) {
+                // Phase 1: Wire traces from source to destination
+                const traceT = t / 0.30;
+                const easedTrace = 1 - Math.pow(1 - traceT, 3); // ease-out cubic
+                const revealCount = Math.floor(easedTrace * effect.totalIndices);
+                effect.tube.geometry.setDrawRange(0, revealCount);
+                effect.glow.geometry.setDrawRange(0, revealCount);
+
+                // Fade in endpoint rings
+                effect.fromRing.material.opacity = Math.min(traceT * 2, 0.8);
+                effect.toRing.material.opacity = Math.min(Math.max(traceT - 0.5, 0) * 2, 0.8);
+
+                // Tube brightens as it extends
+                effect.tube.material.opacity = 0.4 + easedTrace * 0.45;
+                effect.glow.material.opacity = 0.1 + easedTrace * 0.15;
+
+            } else if (t < 0.77) {
+                // Phase 2: Wire fully drawn, energy pulses travel along it
+                effect.tube.geometry.setDrawRange(0, effect.totalIndices);
+                effect.glow.geometry.setDrawRange(0, effect.totalIndices);
+                effect.tube.material.opacity = 0.85;
+                effect.glow.material.opacity = 0.25;
+
+                // Pulse endpoint rings
+                const ringPulse = 0.6 + Math.sin(elapsed * 0.008) * 0.2;
+                effect.fromRing.material.opacity = ringPulse;
+                effect.toRing.material.opacity = ringPulse;
+
+                // Animate energy pulse spheres along the curve
+                const phaseT = (t - 0.30) / 0.47; // 0..1 within phase 2
+                for (let p = 0; p < effect.pulses.length; p++) {
+                    const pulse = effect.pulses[p];
+                    // Stagger each pulse: they travel one after another
+                    const offset = p / effect.pulses.length;
+                    // Each pulse does multiple trips — use modulo
+                    const speed = 1.5; // number of full trips during phase 2
+                    let pulseProgress = ((phaseT * speed) + offset) % 1.0;
+
+                    pulse.visible = true;
+                    const pos = effect.curve.getPointAt(pulseProgress);
+                    pulse.position.copy(pos);
+
+                    // Pulse glow: brighter in the middle of its journey
+                    const glow = Math.sin(pulseProgress * Math.PI);
+                    pulse.material.opacity = 0.5 + glow * 0.5;
+                    pulse.scale.setScalar(0.8 + glow * 0.6);
+                }
+
+            } else {
+                // Phase 3: Fade everything out
+                const fadeT = (t - 0.77) / 0.23;
+                const fadeEase = fadeT * fadeT; // ease-in
+
+                effect.tube.material.opacity = 0.85 * (1 - fadeEase);
+                effect.glow.material.opacity = 0.25 * (1 - fadeEase);
+                effect.fromRing.material.opacity = 0.6 * (1 - fadeEase);
+                effect.toRing.material.opacity = 0.6 * (1 - fadeEase);
+
+                for (let p = 0; p < effect.pulses.length; p++) {
+                    effect.pulses[p].material.opacity = Math.max(0, effect.pulses[p].material.opacity * (1 - fadeEase));
+                    effect.pulses[p].scale.setScalar(Math.max(0.1, effect.pulses[p].scale.x * (1 - fadeEase * 0.5)));
+                }
+            }
+        }
+
+        // ----- ATTACK STRIKE -----
+        if (effect.type === 'attack_strike') {
+            // Phase timings (fractions of total duration 4000ms):
+            // Charge-up:     0% – 20%   (~0.8s) — warning laser flicker + charge glow
+            // Projectile:    20% – 55%  (~1.4s) — high arc with comet trail
+            // Impact:        55% – 70%  (~0.6s) — flash + shockwave + camera shake
+            // Aftermath:     70% – 100% (~1.2s) — embers + fade
+
+            if (t < 0.20) {
+                // Phase 0: Charge-up — warning laser flickers, charge glow builds
+                const chargeT = t / 0.20;
+
+                // Warning laser flickers rapidly (on/off)
+                const flicker = Math.sin(elapsed * 0.04) > 0 ? 1 : 0;
+                const flickerIntensity = chargeT * 0.6;
+                effect.warningLaser.material.opacity = flicker * flickerIntensity;
+
+                // Charge glow builds at source
+                const pulse = 0.5 + Math.sin(elapsed * 0.015) * 0.3;
+                effect.chargeGlow.material.opacity = chargeT * 0.7 * pulse;
+                effect.chargeGlow.scale.setScalar(0.5 + chargeT * 0.8 * pulse);
+
+            } else if (t < 0.55) {
+                // Phase 1: Projectile flies along parabolic arc
+                const arcT = (t - 0.20) / 0.35;
+
+                // Hide charge-up visuals
+                effect.warningLaser.material.opacity = 0;
+                effect.chargeGlow.visible = false;
+
+                // Show projectile
+                effect.projectile.visible = true;
+                effect.projGlow.visible = true;
+                effect.trail.visible = true;
+                effect.projectile.material.opacity = 1.0;
+                effect.trail.material.opacity = 0.7;
+
+                const easedArc = arcT < 0.5
+                    ? 2 * arcT * arcT
+                    : 1 - Math.pow(-2 * arcT + 2, 2) / 2;
+
+                // Quadratic bezier: from -> apex -> to
+                const a = 1 - easedArc;
+                const b = easedArc;
+                const pos = new THREE.Vector3();
+                pos.x = a * a * effect.fromPos.x + 2 * a * b * effect.apex.x + b * b * effect.toPos.x;
+                pos.y = a * a * effect.fromPos.y + 2 * a * b * effect.apex.y + b * b * effect.toPos.y;
+                pos.z = a * a * effect.fromPos.z + 2 * a * b * effect.apex.z + b * b * effect.toPos.z;
+
+                effect.projectile.position.copy(pos);
+                effect.projGlow.position.copy(pos);
+
+                // Pulsate glow
+                const gPulse = 0.9 + Math.sin(elapsed * 0.025) * 0.3;
+                effect.projGlow.scale.setScalar(gPulse);
+                effect.projGlow.material.opacity = 0.35 + gPulse * 0.2;
+
+                // Speed up near end (menacing acceleration)
+                effect.projectile.scale.setScalar(1.0 + arcT * 0.3);
+
+                // Comet trail: shift positions, newest at index 0
+                const tp = effect.trailPositions;
+                for (let ti = tp.length / 3 - 1; ti > 0; ti--) {
+                    tp[ti * 3] = tp[(ti - 1) * 3];
+                    tp[ti * 3 + 1] = tp[(ti - 1) * 3 + 1];
+                    tp[ti * 3 + 2] = tp[(ti - 1) * 3 + 2];
+                }
+                tp[0] = pos.x;
+                tp[1] = pos.y;
+                tp[2] = pos.z;
+                effect.trail.geometry.attributes.position.needsUpdate = true;
+
+            } else if (t < 0.70) {
+                // Phase 2: Impact — flash + shockwave + camera shake
+                const impactT = (t - 0.55) / 0.15;
+
+                // Trigger camera shake on first frame of impact
+                if (!effect.shakeTriggered) {
+                    effect.shakeTriggered = true;
+                    triggerCameraShake(1.2, 900, 40);
+                }
+
+                // Hide projectile
+                effect.projectile.visible = false;
+                effect.projGlow.visible = false;
+                effect.trail.visible = false;
+                effect.warningLaser.visible = false;
+
+                // Flash: big white sphere that shrinks fast
+                effect.flash.visible = true;
+                const flashScale = 3.0 * (1 - impactT);
+                effect.flash.scale.setScalar(Math.max(0.01, flashScale));
+                effect.flash.material.opacity = 1.0 * (1 - impactT * impactT);
+
+                // Main shockwave: expands wide
+                effect.shockwave.visible = true;
+                const shockScale = 0.5 + impactT * 7.0;
+                effect.shockwave.scale.setScalar(shockScale);
+                effect.shockwave.material.opacity = 1.0 * (1 - impactT);
+
+                // Second shockwave (delayed, larger)
+                if (effect.successRing) {
+                    const delayedT = Math.max(0, impactT - 0.25) / 0.75;
+                    effect.successRing.visible = true;
+                    effect.successRing.scale.setScalar(0.5 + delayedT * 5.0);
+                    effect.successRing.material.opacity = 0.8 * (1 - delayedT);
+                }
+
+                // Start embers
+                effect.embers.visible = true;
+                effect.embers.material.opacity = 0.9;
+
+                // Flash target tile red
+                if (effect.targetHex) {
+                    effect.targetHex.children.forEach(child => {
+                        if (child.material && child.material.emissive) {
+                            child.material.emissive.setHex(effect.isSuccess ? 0xe53e6b : 0x888888);
+                            child.material.emissiveIntensity = 1.2 * (1 - impactT);
+                        }
+                    });
+                }
+
+            } else {
+                // Phase 3: Aftermath — embers rise and fade, everything cleans up
+                const afterT = (t - 0.70) / 0.30;
+
+                // Flash gone
+                if (effect.flash.visible) effect.flash.visible = false;
+
+                // Shockwaves fade
+                effect.shockwave.material.opacity = Math.max(0, 0.15 * (1 - afterT));
+                if (effect.successRing) {
+                    effect.successRing.material.opacity = Math.max(0, 0.1 * (1 - afterT));
+                }
+
+                // Embers rise and fade
+                const ep = effect.emberPositions;
+                for (let ei = 0; ei < effect.emberVelocities.length; ei++) {
+                    const vel = effect.emberVelocities[ei];
+                    ep[ei * 3] += vel.x;
+                    ep[ei * 3 + 1] += vel.y;
+                    ep[ei * 3 + 2] += vel.z;
+                    vel.multiplyScalar(0.96);
+                }
+                effect.embers.geometry.attributes.position.needsUpdate = true;
+                effect.embers.material.opacity = 0.9 * (1 - afterT);
+
+                // Reset target hex emissive
+                if (effect.targetHex && afterT > 0.2) {
+                    effect.targetHex.children.forEach(child => {
+                        if (child.material && child.material.emissive) {
+                            child.material.emissiveIntensity = Math.max(0, child.material.emissiveIntensity - 0.06);
+                        }
+                    });
+                }
+            }
+        }
         
-        // Remove completed effects
+        // ----- REMOVE COMPLETED EFFECTS -----
         if (t >= 1.0) {
             if (effect.type === 'beacon') {
                 scene.remove(effect.beam);
@@ -670,6 +1297,68 @@ function updateActiveEffects() {
                 effect.beam.material.dispose();
                 effect.glow.geometry.dispose();
                 effect.glow.material.dispose();
+            }
+            if (effect.type === 'trade_route') {
+                scene.remove(effect.tube);
+                scene.remove(effect.glow);
+                effect.tube.geometry.dispose();
+                effect.tube.material.dispose();
+                effect.glow.geometry.dispose();
+                effect.glow.material.dispose();
+                scene.remove(effect.fromRing);
+                scene.remove(effect.toRing);
+                effect.fromRing.geometry.dispose();
+                effect.fromRing.material.dispose();
+                effect.toRing.geometry.dispose();
+                effect.toRing.material.dispose();
+                for (const pulse of effect.pulses) {
+                    scene.remove(pulse);
+                    pulse.material.dispose();
+                }
+                // Shared geometry — only dispose once
+                if (effect.pulses.length > 0) {
+                    effect.pulses[0].geometry.dispose();
+                }
+            }
+            if (effect.type === 'attack_strike') {
+                scene.remove(effect.warningLaser);
+                scene.remove(effect.chargeGlow);
+                scene.remove(effect.projectile);
+                scene.remove(effect.projGlow);
+                scene.remove(effect.trail);
+                scene.remove(effect.shockwave);
+                scene.remove(effect.flash);
+                scene.remove(effect.embers);
+                effect.warningLaser.geometry.dispose();
+                effect.warningLaser.material.dispose();
+                effect.chargeGlow.geometry.dispose();
+                effect.chargeGlow.material.dispose();
+                effect.projectile.geometry.dispose();
+                effect.projectile.material.dispose();
+                effect.projGlow.geometry.dispose();
+                effect.projGlow.material.dispose();
+                effect.trail.geometry.dispose();
+                effect.trail.material.dispose();
+                effect.shockwave.geometry.dispose();
+                effect.shockwave.material.dispose();
+                effect.flash.geometry.dispose();
+                effect.flash.material.dispose();
+                effect.embers.geometry.dispose();
+                effect.embers.material.dispose();
+                if (effect.successRing) {
+                    scene.remove(effect.successRing);
+                    effect.successRing.geometry.dispose();
+                    effect.successRing.material.dispose();
+                }
+                // Reset target hex emissive to 0
+                if (effect.targetHex) {
+                    effect.targetHex.children.forEach(child => {
+                        if (child.material && child.material.emissive) {
+                            child.material.emissiveIntensity = 0;
+                            child.material.emissive.setHex(0x000000);
+                        }
+                    });
+                }
             }
             activeEffects.splice(i, 1);
         }
@@ -1457,6 +2146,9 @@ export function startAnimationLoop() {
         
         // Update smooth orbit retarget
         updateOrbitRetarget();
+        
+        // Update camera shake
+        updateCameraShake();
         
         controls.update();
         composer.render();

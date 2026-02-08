@@ -1,5 +1,5 @@
 /**
- * CONQUEST Tick Processor
+ * CLAWQUEST Tick Processor
  * 
  * Handles periodic game updates:
  * 1. Resource production - Tiles generate food/metal based on terrain

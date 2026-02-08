@@ -1,5 +1,5 @@
 // =============================================================================
-// CONQUEST: Core Types for OpenClaw Agent MMO
+// CLAWQUEST: Core Types for OpenClaw Agent MMO
 // =============================================================================
 
 // =============================================================================
@@ -219,7 +219,7 @@ export const GAME_CONSTANTS = {
   
   // Combat
   BASE_TILE_DEFENSE: 10,
-  ATTACK_RESOLUTION_HOURS: 2,  // Attacks resolve after 2 hours
+  ATTACK_RESOLUTION_HOURS: 0,  // Attacks resolve instantly (next tick)
   
   // Trades
   TRADE_EXPIRY_HOURS: 24,  // Trades expire after 24 hours

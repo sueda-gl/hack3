@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CONQUEST - Agent Dashboard</title>
+    <title>CLAWQUEST - Agent Dashboard</title>
     <style>
         * {
             margin: 0;
@@ -345,7 +345,7 @@
 </head>
 <body>
     <header class="header">
-        <div class="logo">CONQUEST</div>
+        <div class="logo">CLAWQUEST</div>
         <div class="agent-info">
             <div class="status-dot"></div>
             <div class="agent-name" id="agent-name">Loading...</div>
@@ -367,10 +367,10 @@
                 <!-- Send Command -->
                 <div class="control-section">
                     <div class="control-label">Send Orders to Agent</div>
-                    <textarea class="command-input" id="command-input" placeholder="Tell your agent what to do...&#10;&#10;Examples:&#10;• Check CONQUEST and take all useful actions&#10;• Form an alliance with Maticlaw&#10;• Fortify our most valuable tiles"></textarea>
+                    <textarea class="command-input" id="command-input" placeholder="Tell your agent what to do...&#10;&#10;Examples:&#10;• Check CLAWQUEST and take all useful actions&#10;• Form an alliance with Maticlaw&#10;• Fortify our most valuable tiles"></textarea>
                     <div class="btn-row">
                         <button class="btn" id="send-command">Send Command</button>
-                        <button class="btn btn-secondary" id="check-conquest">Check Game</button>
+                        <button class="btn btn-secondary" id="check-clawquest">Check Game</button>
                     </div>
                 </div>
                 
@@ -378,10 +378,10 @@
                 <div class="control-section">
                     <div class="control-label">Quick Actions</div>
                     <div class="quick-actions">
-                        <button class="quick-btn" data-cmd="Check CONQUEST, handle all messages and take strategic actions">Full Turn</button>
-                        <button class="quick-btn" data-cmd="Check for any unread messages in CONQUEST and respond to each one">Check Messages</button>
-                        <button class="quick-btn" data-cmd="Review my CONQUEST territories and fortify any vulnerable ones">Fortify</button>
-                        <button class="quick-btn" data-cmd="Look for expansion opportunities in CONQUEST and expand if worthwhile">Expand</button>
+                        <button class="quick-btn" data-cmd="Check CLAWQUEST, handle all messages and take strategic actions">Full Turn</button>
+                        <button class="quick-btn" data-cmd="Check for any unread messages in CLAWQUEST and respond to each one">Check Messages</button>
+                        <button class="quick-btn" data-cmd="Review my CLAWQUEST territories and fortify any vulnerable ones">Fortify</button>
+                        <button class="quick-btn" data-cmd="Look for expansion opportunities in CLAWQUEST and expand if worthwhile">Expand</button>
                     </div>
                 </div>
                 
@@ -419,8 +419,9 @@
         // CONFIGURATION
         // =============================================================================
         
-        const API_URL = 'http://localhost:3000';
-        const WS_URL = 'ws://localhost:3000/ws';
+        // Auto-detect server URL from the page's origin (works for both localhost and deployed)
+        const API_URL = window.location.origin;
+        const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
         
         // Get agent ID from URL params
         const params = new URLSearchParams(window.location.search);
@@ -671,8 +672,8 @@
             }
         });
         
-        document.getElementById('check-conquest').addEventListener('click', () => {
-            sendCommand('Check CONQUEST and take all useful actions until nothing productive remains');
+        document.getElementById('check-clawquest').addEventListener('click', () => {
+            sendCommand('Check CLAWQUEST and take all useful actions until nothing productive remains');
         });
         
         document.getElementById('save-strategy').addEventListener('click', saveStrategy);

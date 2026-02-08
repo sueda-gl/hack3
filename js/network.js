@@ -1,5 +1,5 @@
 /**
- * CONQUEST - Network Module
+ * CLAWQUEST - Network Module
  * 
  * Handles all server communication:
  * - REST API calls
@@ -10,8 +10,9 @@
 // CONFIGURATION
 // =============================================================================
 
-const API_URL = 'http://localhost:3000';
-const WS_URL = 'ws://localhost:3000/ws';
+// Auto-detect server URL from the page's origin (works for both localhost and deployed)
+const API_URL = window.location.origin;
+const WS_URL = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 
 // =============================================================================
 // WEBSOCKET

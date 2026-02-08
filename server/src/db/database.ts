@@ -1,12 +1,19 @@
 import Database, { Database as DatabaseType } from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Database file location
-const dbPath = path.join(__dirname, '../../data/conquest.db');
+// Database file location (configurable via DATA_DIR env var for deployed environments)
+const dataDir = process.env.DATA_DIR || path.join(__dirname, '../../data');
+const dbPath = path.join(dataDir, 'clawquest.db');
+
+// Ensure data directory exists before opening database
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
 
 // Initialize database
 const db: DatabaseType = new Database(dbPath);

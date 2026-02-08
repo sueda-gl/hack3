@@ -13,7 +13,7 @@ import actionRoutes from './routes/actions.js';
 import dashboardRoutes from './routes/dashboard.js';
 
 // Import database to initialize it
-import './db/database.js';
+import db from './db/database.js';
 
 // Import broadcast handler registration
 import { setBroadcastHandler } from './game/broadcast.js';
@@ -98,7 +98,7 @@ app.use('/api/dashboard', dashboardRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', game: 'CONQUEST', version: '2.0.0' });
+  res.json({ status: 'ok', game: 'CLAWQUEST', version: '2.0.0' });
 });
 
 // =============================================================================
@@ -109,6 +109,60 @@ app.get('/api/health', (req, res) => {
 app.get('/api/admin/tick/status', (req, res) => {
   const status = getSchedulerStatus();
   res.json(status);
+});
+
+// Reset game: equalize all agents (keep agents, clear tiles/events/messages)
+app.post('/api/admin/reset', (req, res) => {
+  try {
+    const keepAgentIds = (req.body.keep_agents as string[] | undefined) || [];
+    const startFood = (req.body.food as number) || 200;
+    const startMetal = (req.body.metal as number) || 100;
+
+    // Disable foreign keys for clean reset
+    db.pragma('foreign_keys = OFF');
+
+    // Clear all relational data first
+    db.prepare(`DELETE FROM events`).run();
+    db.prepare(`DELETE FROM messages`).run();
+    db.prepare(`DELETE FROM trades`).run();
+    db.prepare(`DELETE FROM attacks`).run();
+    db.prepare(`DELETE FROM dashboard_messages`).run();
+
+    // Release all tiles
+    db.prepare(`UPDATE tiles SET owner_id = NULL, fortification = 0`).run();
+
+    // Remove agents not in keep list
+    if (keepAgentIds.length > 0) {
+      const placeholders = keepAgentIds.map(() => '?').join(',');
+      db.prepare(`DELETE FROM agent_memories WHERE agent_id NOT IN (${placeholders})`).run(...keepAgentIds);
+      db.prepare(`DELETE FROM agents WHERE id NOT IN (${placeholders})`).run(...keepAgentIds);
+    }
+
+    // Equalize resources and clear memories
+    db.prepare(`UPDATE agents SET food = ?, metal = ?`).run(startFood, startMetal);
+    db.prepare(`UPDATE agent_memories SET content = ''`).run();
+
+    // Re-enable foreign keys
+    db.pragma('foreign_keys = ON');
+
+    // Assign one starting tile per agent near center
+    const agents = db.prepare(`SELECT id FROM agents`).all() as { id: string }[];
+    for (const agent of agents) {
+      const tile = db.prepare(`SELECT q, r FROM tiles WHERE owner_id IS NULL ORDER BY (q*q + r*r + q*r) ASC LIMIT 1`).get() as { q: number; r: number } | undefined;
+      if (tile) {
+        db.prepare(`UPDATE tiles SET owner_id = ? WHERE q = ? AND r = ?`).run(agent.id, tile.q, tile.r);
+        db.prepare(`UPDATE agents SET capital_q = ?, capital_r = ? WHERE id = ?`).run(tile.q, tile.r, agent.id);
+      }
+    }
+
+    // Reset tick counter
+    db.prepare(`UPDATE game_state SET current_tick = 0, last_tick_at = datetime('now')`).run();
+
+    const remaining = db.prepare(`SELECT id, display_name, food, metal FROM agents`).all();
+    res.json({ success: true, message: 'Game reset', agents: remaining });
+  } catch (error) {
+    res.status(500).json({ success: false, message: `Reset error: ${error}` });
+  }
 });
 
 // Manually trigger a tick (for testing)
@@ -155,7 +209,7 @@ wss.on('connection', (ws) => {
   // Send welcome message
   ws.send(JSON.stringify({
     type: 'connected',
-    message: 'Welcome to CONQUEST v2.0 - OpenClaw Agent MMO',
+    message: 'Welcome to CLAWQUEST v2.0 - OpenClaw Agent MMO',
   }));
 });
 
@@ -177,7 +231,7 @@ server.listen(PORT, () => {
   console.log(`
   ╔═══════════════════════════════════════════════════════════════╗
   ║                                                               ║
-  ║   CONQUEST Server v2.0.0                                      ║
+  ║   CLAWQUEST Server v2.0.0                                      ║
   ║   OpenClaw Agent MMO Game                                     ║
   ║                                                               ║
   ║   HTTP:  http://localhost:${PORT}                                ║

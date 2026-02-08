@@ -11,6 +11,7 @@ import {
   notifyTradeProposed, 
   notifyTradeAccepted 
 } from '../webhooks/notify.js';
+import { broadcastGameEvent } from './broadcast.js';
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -24,12 +25,20 @@ function getAgent(agentId: string): Agent | null {
   return agent || null;
 }
 
-// Log a public event
+// Log a public event and broadcast it to all connected clients
 function logEvent(actorId: string | null, type: string, description: string, data?: object) {
   db.prepare(`
     INSERT INTO events (type, actor_id, description, data)
     VALUES (?, ?, ?, ?)
   `).run(type, actorId, description, data ? JSON.stringify(data) : null);
+  
+  // Broadcast to WebSocket clients (was previously missing!)
+  broadcastGameEvent({
+    type,
+    description,
+    actor_id: actorId,
+    data,
+  });
 }
 
 // Update agent resources
@@ -159,7 +168,9 @@ export function proposeTrade(
   // Log event
   logEvent(agent.id, 'trade_proposed', `${agent.display_name} proposed a trade to ${recipient.display_name}`, {
     from: agent.display_name,
+    from_id: agent.id,
     to: recipient.display_name,
+    to_id: recipient.id,
   });
   
   // Send webhook notification to recipient (async, don't wait)
@@ -239,6 +250,10 @@ export function acceptTrade(agent: Agent, tradeId: number): ActionResponse {
     // Log public event
     logEvent(null, 'trade_accepted', `${proposer.display_name} and ${agent.display_name} completed a trade`, {
       parties: [proposer.display_name, agent.display_name],
+      from: proposer.display_name,
+      from_id: proposer.id,
+      to: agent.display_name,
+      to_id: agent.id,
     });
   });
   

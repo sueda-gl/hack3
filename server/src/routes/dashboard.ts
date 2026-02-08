@@ -1,7 +1,7 @@
 /**
  * Dashboard Communication Routes
  * 
- * Provides human-to-agent chat functionality via the CONQUEST dashboard.
+ * Provides human-to-agent chat functionality via the CLAWQUEST dashboard.
  * Uses OpenClaw's /v1/chat/completions endpoint (synchronous) — the same
  * approach that worked in the first commit.
  * 
@@ -78,10 +78,10 @@ function saveChatMessage(agentId: string, direction: 'human_to_agent' | 'agent_t
 }
 
 /**
- * Build CONQUEST game context for the system prompt.
+ * Build CLAWQUEST game context for the system prompt.
  * Gives the agent awareness of its current game state.
  */
-function buildConquestContext(agentId: string): string {
+function buildClawQuestContext(agentId: string): string {
   const agent = getAgentById(agentId);
   if (!agent) return '';
 
@@ -113,7 +113,7 @@ function buildConquestContext(agentId: string): string {
   `).get() as { current_tick: number };
 
   // Build context string
-  let context = `## Your Current CONQUEST Status
+  let context = `## Your Current CLAWQUEST Status
 
 **Agent:** ${agent.display_name} (${agent.id})
 **Resources:** ${agent.food} food, ${agent.metal} metal
@@ -127,7 +127,7 @@ function buildConquestContext(agentId: string): string {
 
   if (memory?.content) {
     context += `
-## Your CONQUEST Memory
+## Your CLAWQUEST Memory
 ${memory.content}
 `;
   }
@@ -182,23 +182,23 @@ router.post('/:id/send', async (req: Request, res: Response) => {
   }
 
   try {
-    // Build CONQUEST context
-    const conquestContext = buildConquestContext(agentId);
+    // Build CLAWQUEST context
+    const clawquestContext = buildClawQuestContext(agentId);
     
     // Get chat history
     const chatHistory = getChatHistory(agentId);
     
-    // Build system prompt with CONQUEST context
-    const systemPrompt = `You are responding to your human via the CONQUEST game dashboard.
+    // Build system prompt with CLAWQUEST context
+    const systemPrompt = `You are responding to your human via the CLAWQUEST game dashboard.
 
-${conquestContext}
+${clawquestContext}
 
 **Instructions:**
-- You have full context of your CONQUEST game state above
+- You have full context of your CLAWQUEST game state above
 - Keep responses concise but helpful
 - If your human asks about game status, refer to the information above
-- If they ask you to take actions (expand, attack, message, etc.), you can use your CONQUEST skill to do so on your next heartbeat
-- Remember: your CONQUEST memory is stored on the game server, separate from your personal memory`;
+- If they ask you to take actions (expand, attack, message, etc.), you can use your CLAWQUEST skill to do so on your next heartbeat
+- Remember: your CLAWQUEST memory is stored on the game server, separate from your personal memory`;
 
     // Build messages array: system + history + new message
     const messages: Array<{ role: string; content: string }> = [
@@ -222,9 +222,11 @@ ${conquestContext}
 
     console.log(`[Dashboard] Calling chat completions for ${agent.display_name}: ${chatCompletionsUrl}`);
 
-    // Create abort controller for timeout (30 seconds for LLM response)
+    // Create abort controller for timeout (90 seconds for LLM response)
+    // The system prompt includes full CLAWQUEST context (territories, memory, strategy)
+    // which can take a while for the LLM to process
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
 
     // Call OpenClaw /v1/chat/completions
     const response = await fetch(chatCompletionsUrl, {
@@ -283,7 +285,7 @@ ${conquestContext}
     if (errorMessage.includes('aborted')) {
       res.status(504).json({ 
         error: 'Agent took too long to respond',
-        details: 'Request timed out after 30 seconds'
+        details: 'Request timed out after 90 seconds'
       });
       return;
     }

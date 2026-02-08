@@ -1,7 +1,7 @@
 {
-  "name": "conquest-server",
+  "name": "clawquest-server",
   "version": "1.0.0",
-  "description": "CONQUEST: AI Agent MMO Game Server",
+  "description": "CLAWQUEST: AI Agent MMO Game Server",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",

@@ -1,0 +1,661 @@
+/* ===== TERMINAL PANEL ===== */
+
+/* --- Terminal window --- */
+#agent-panel {
+    width: 380px;
+    height: 480px;
+    min-width: 280px;
+    min-height: 200px;
+    max-width: 90vw;
+    max-height: 90vh;
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    border-radius: 6px;
+    background: rgba(30, 30, 30, 0.95);
+    border: 1px solid #3a3a3a;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+}
+
+#agent-panel.collapsed {
+    height: 36px !important;
+    min-height: 36px;
+    overflow: hidden;
+    resize: none;
+}
+
+/* --- Resize handles --- */
+.resize-handle {
+    position: absolute;
+    z-index: 10;
+}
+.resize-handle-r {
+    right: 0; top: 36px; bottom: 0;
+    width: 5px;
+    cursor: ew-resize;
+}
+.resize-handle-b {
+    bottom: 0; left: 0; right: 0;
+    height: 5px;
+    cursor: ns-resize;
+}
+.resize-handle-l {
+    left: 0; top: 36px; bottom: 0;
+    width: 5px;
+    cursor: ew-resize;
+}
+.resize-handle-t {
+    top: 36px; left: 0; right: 0;
+    height: 0;  /* disabled — title bar is the top edge */
+}
+.resize-handle-br {
+    bottom: 0; right: 0;
+    width: 12px; height: 12px;
+    cursor: nwse-resize;
+}
+.resize-handle-bl {
+    bottom: 0; left: 0;
+    width: 12px; height: 12px;
+    cursor: nesw-resize;
+}
+#agent-panel.collapsed .resize-handle {
+    display: none;
+}
+
+/* Subtle grip indicator (bottom-right corner) */
+.resize-handle-br::after {
+    content: '';
+    position: absolute;
+    bottom: 3px;
+    right: 3px;
+    width: 6px;
+    height: 6px;
+    border-right: 2px solid #444;
+    border-bottom: 2px solid #444;
+}
+
+/* --- macOS title bar --- */
+.panel-header {
+    height: 36px;
+    min-height: 36px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #2d2d2d;
+    border-bottom: 1px solid #3a3a3a;
+    border-radius: 6px 6px 0 0;
+    cursor: move;
+    user-select: none;
+    position: relative;
+}
+
+/* Traffic light dots */
+.window-controls {
+    display: flex;
+    gap: 8px;
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+.window-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    cursor: pointer;
+    position: relative;
+}
+.window-dot.close { background: #ff5f57; }
+.window-dot.minimize { background: #ffbd2e; }
+.window-dot.maximize { background: #28c840; }
+
+/* Dim dots when panel loses focus */
+#agent-panel.collapsed .window-dot {
+    background: #555 !important;
+}
+
+/* Title text (centered) */
+.terminal-title {
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    color: #999;
+    letter-spacing: 0.5px;
+    text-align: center;
+}
+
+/* Resource bar (below title bar) */
+.resource-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 14px;
+    background: #252525;
+    border-bottom: 1px solid #333;
+    font-size: 11px;
+    color: #6a9955;
+    flex-shrink: 0;
+}
+.resource-bar .res-group {
+    display: flex;
+    gap: 16px;
+}
+.resource-bar .res-item {
+    color: #6a9955;
+}
+.resource-bar .res-item .res-label {
+    color: #666;
+}
+.resource-bar .res-item .res-value {
+    color: #6a9955;
+}
+
+/* --- Tab bar (terminal-style) --- */
+.panel-tabs {
+    display: flex;
+    background: #252525;
+    border-bottom: 1px solid #333;
+    flex-shrink: 0;
+    height: 30px;
+}
+.panel-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 11px;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border-right: 1px solid #333;
+    padding: 0 10px;
+    text-transform: lowercase;
+    letter-spacing: 0.5px;
+}
+.panel-tab:last-child {
+    border-right: none;
+}
+.panel-tab:hover {
+    color: #999;
+    background: rgba(255, 255, 255, 0.03);
+}
+.panel-tab.active {
+    color: #ccc;
+    background: #1e1e1e;
+    border-bottom: none;
+}
+.panel-tab.disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* --- Tab content --- */
+.tab-content {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    background: #1e1e1e;
+}
+.tab-content.active {
+    display: flex;
+}
+
+/* --- Activity tab: Connections list --- */
+#connections-view,
+#thread-view {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.panel-section-header {
+    padding: 6px 14px;
+    font-size: 11px;
+    color: #555;
+    letter-spacing: 0.5px;
+    text-transform: lowercase;
+    border-bottom: 1px solid #2a2a2a;
+    background: #222;
+    flex-shrink: 0;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+}
+
+#connections-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+}
+
+/* Connection items as terminal log lines */
+.connection-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    padding: 8px 14px;
+    border-bottom: 1px solid #2a2a2a;
+    cursor: pointer;
+    transition: background 0.1s ease;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+}
+.connection-item:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+.connection-item:last-child {
+    border-bottom: none;
+}
+
+.connection-time {
+    font-size: 11px;
+    color: #555;
+    flex-shrink: 0;
+    min-width: 32px;
+    margin-right: 8px;
+}
+.connection-name {
+    font-size: 12px;
+    font-weight: 400;
+    color: #569cd6;
+    text-transform: lowercase;
+    letter-spacing: 0;
+    flex-shrink: 0;
+    min-width: 90px;
+    margin-right: 8px;
+}
+.connection-preview {
+    font-size: 11px;
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+.connection-unread {
+    background: none;
+    color: #f44747;
+    font-size: 11px;
+    font-weight: 400;
+    flex-shrink: 0;
+    margin-left: 6px;
+    padding: 0;
+    min-width: auto;
+    height: auto;
+    border-radius: 0;
+    display: inline;
+}
+
+/* --- Thread view --- */
+.thread-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-bottom: 1px solid #2a2a2a;
+    background: #222;
+    flex-shrink: 0;
+}
+.thread-back {
+    cursor: pointer;
+    color: #666;
+    font-size: 14px;
+    padding: 2px 4px;
+    transition: color 0.1s ease;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+}
+.thread-back:hover {
+    color: #ccc;
+}
+.thread-name {
+    font-size: 12px;
+    font-weight: 400;
+    color: #569cd6;
+    text-transform: lowercase;
+    letter-spacing: 0;
+}
+#thread-messages {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    padding: 8px 14px;
+}
+
+/* Thread messages as terminal log output */
+.thread-msg {
+    margin-bottom: 2px;
+    padding: 4px 0;
+    border-bottom: none;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+}
+.thread-msg:last-child {
+    border-bottom: none;
+}
+.thread-msg-meta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 2px;
+}
+.thread-msg-sender {
+    font-size: 11px;
+    font-weight: 400;
+    color: #569cd6;
+    text-transform: lowercase;
+    letter-spacing: 0;
+}
+.thread-msg-sender.self {
+    color: #6a9955;
+}
+.thread-msg-time {
+    font-size: 10px;
+    color: #444;
+}
+.thread-msg-content {
+    font-size: 12px;
+    color: #ccc;
+    line-height: 1.5;
+    padding-left: 2px;
+}
+.thread-msg-content strong {
+    color: #fff;
+    font-weight: 600;
+}
+.thread-msg-content em {
+    color: #888;
+    font-style: italic;
+}
+.thread-msg-content code {
+    background: #2a2a2a;
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 11px;
+    color: #ce9178;
+}
+
+/* --- Tile context indicator --- */
+#tile-context {
+    padding: 4px 14px;
+    font-size: 11px;
+    color: #dcdcaa;
+    background: #252525;
+    border-top: 1px solid #2a2a2a;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+}
+
+/* --- Command tab (terminal prompt) --- */
+#chat-container {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+#chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 14px;
+    min-height: 0;
+}
+
+/* Messages as command/response pairs */
+.chat-message {
+    margin-bottom: 4px;
+    padding: 0;
+    border-radius: 0;
+    max-width: 100%;
+    background: none;
+    border: none;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+}
+.chat-message.human,
+.chat-message.agent {
+    background: none;
+    border: none;
+    margin-left: 0;
+    margin-right: 0;
+}
+.chat-message .sender {
+    display: none; /* We use prompt prefix instead */
+}
+.chat-message .content {
+    font-size: 12px;
+    color: #ccc;
+    line-height: 1.5;
+}
+.chat-message.human .content {
+    color: #6a9955;
+}
+.chat-message.human .content::before {
+    content: '$ ';
+    color: #6a9955;
+}
+.chat-message.agent .content {
+    color: #ccc;
+}
+.chat-message.agent .content::before {
+    content: '> ';
+    color: #569cd6;
+}
+.chat-message .content strong {
+    color: #fff;
+    font-weight: 600;
+}
+.chat-message .content em {
+    color: #888;
+    font-style: italic;
+}
+.chat-message .content code {
+    background: #2a2a2a;
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-family: inherit;
+    font-size: 11px;
+    color: #ce9178;
+}
+.chat-message .time {
+    display: none; /* Clean terminal feel */
+}
+
+/* Terminal prompt input */
+#chat-input-container {
+    display: flex;
+    gap: 0;
+    padding: 0;
+    border-top: 1px solid #2a2a2a;
+    background: #1e1e1e;
+    align-items: center;
+}
+.prompt-symbol {
+    color: #6a9955;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    padding: 10px 0 10px 14px;
+    flex-shrink: 0;
+    user-select: none;
+}
+#chat-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 10px 8px;
+    color: #ccc;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    resize: none;
+    caret-color: #6a9955;
+}
+#chat-input:focus {
+    outline: none;
+    border-color: transparent;
+}
+#chat-input::placeholder {
+    color: #444;
+}
+#chat-send {
+    display: none; /* Enter to submit, no button */
+}
+#chat-status {
+    font-size: 11px;
+    color: #6a9955;
+    text-align: left;
+    padding: 4px 14px;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+}
+.chat-disabled-notice {
+    padding: 20px 14px;
+    text-align: left;
+    color: #666;
+    font-size: 12px;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+}
+.chat-disabled-notice code {
+    background: #2a2a2a;
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 11px;
+    color: #ce9178;
+}
+
+/* --- Skills tab (editor pane) --- */
+#skills-editor-container {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    padding: 0;
+    gap: 0;
+}
+#skills-textarea {
+    flex: 1;
+    min-height: 150px;
+    background: #1e1e1e;
+    border: none;
+    border-radius: 0;
+    padding: 10px 14px;
+    color: #ccc;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    resize: none;
+    caret-color: #6a9955;
+}
+#skills-textarea:focus {
+    outline: none;
+}
+#skills-textarea::placeholder {
+    color: #444;
+}
+#skills-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 6px 14px;
+    background: #252525;
+    border-top: 1px solid #333;
+}
+#skills-status {
+    font-size: 11px;
+    color: #666;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+}
+#skills-status.unsaved {
+    color: #f44747;
+}
+#skills-status.saved {
+    color: #6a9955;
+}
+#skills-save {
+    background: transparent;
+    color: #999;
+    border: 1px solid #444;
+    border-radius: 3px;
+    padding: 4px 12px;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-weight: 400;
+    font-size: 11px;
+    letter-spacing: 0;
+    text-transform: lowercase;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+#skills-save:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #ccc;
+    border-color: #666;
+}
+#skills-save:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* --- Empty state --- */
+.empty-state {
+    text-align: left;
+    padding: 20px 14px;
+    color: #555;
+    font-size: 12px;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+}
+.empty-state::before {
+    content: '~ ';
+    color: #444;
+}
+
+/* --- Scrollbar (thin, minimal) --- */
+#connections-list::-webkit-scrollbar,
+#thread-messages::-webkit-scrollbar,
+#chat-messages::-webkit-scrollbar,
+#skills-textarea::-webkit-scrollbar {
+    width: 4px;
+}
+#connections-list::-webkit-scrollbar-track,
+#thread-messages::-webkit-scrollbar-track,
+#chat-messages::-webkit-scrollbar-track,
+#skills-textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+#connections-list::-webkit-scrollbar-thumb,
+#thread-messages::-webkit-scrollbar-thumb,
+#chat-messages::-webkit-scrollbar-thumb,
+#skills-textarea::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 2px;
+}
+#connections-list::-webkit-scrollbar-thumb:hover,
+#thread-messages::-webkit-scrollbar-thumb:hover,
+#chat-messages::-webkit-scrollbar-thumb:hover,
+#skills-textarea::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* --- Blinking cursor --- */
+@keyframes blink-cursor {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+}
+.cursor-blink::after {
+    content: '\2588';
+    color: #6a9955;
+    animation: blink-cursor 1.06s step-end infinite;
+    margin-left: 1px;
+}
+
+/* --- Hidden utility --- */
+.hidden {
+    display: none !important;
+}

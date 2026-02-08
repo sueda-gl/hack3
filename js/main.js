@@ -1,5 +1,5 @@
 /**
- * CONQUEST - Main Entry Point
+ * CLAWQUEST - Main Entry Point
  * 
  * Orchestrates the game:
  * - Initializes graphics and network
@@ -30,7 +30,9 @@ import {
     removeStructureFromHex,
     setOrbitTarget,
     setControlsEnabled,
-    triggerClaimEffect
+    triggerClaimEffect,
+    triggerTradeRoute,
+    triggerAttackEffect
 } from './graphics.js';
 
 import {
@@ -294,7 +296,7 @@ function updateInfoPanel(selectedTile = null) {
         const hexagons = getHexagons();
         const claimedCount = hexagons.filter(h => h.userData.owner_id).length;
         info.innerHTML = `
-            <div style="margin-bottom: 4px;">CONQUEST</div>
+            <div style="margin-bottom: 4px;">CLAWQUEST</div>
             <div>Tiles: ${hexagons.length} | Claimed: ${claimedCount}</div>
             <div style="color: #4a5568; font-size: 10px; margin-top: 8px;">Click a tile for info</div>
         `;
@@ -358,6 +360,64 @@ function getEventColor(type) {
 }
 
 // =============================================================================
+// HELPER: Find tiles for animation source/target
+// =============================================================================
+
+/**
+ * Get hex neighbors (axial coordinates) — mirrors server-side getNeighbors.
+ */
+function getHexNeighborCoords(q, r) {
+    return [
+        { q: q + 1, r: r },
+        { q: q - 1, r: r },
+        { q: q, r: r + 1 },
+        { q: q, r: r - 1 },
+        { q: q + 1, r: r - 1 },
+        { q: q - 1, r: r + 1 },
+    ];
+}
+
+/**
+ * Find an adjacent hex tile owned by a specific agent ID.
+ * Used to find the "from" tile for attack animations.
+ * @param {number} targetQ - Target tile q
+ * @param {number} targetR - Target tile r
+ * @param {string} ownerId - Agent ID to match
+ * @returns {THREE.Group|null}
+ */
+function findAdjacentOwnedBy(targetQ, targetR, ownerId) {
+    if (!ownerId) return null;
+    const neighbors = getHexNeighborCoords(targetQ, targetR);
+    for (const n of neighbors) {
+        const hex = getHexAt(n.q, n.r);
+        if (hex && hex.userData.owner_id === ownerId) {
+            return hex;
+        }
+    }
+    return null;
+}
+
+/**
+ * Find any tile owned by an agent matching a display name.
+ * Prefers capital tiles. Used for trade/gift route endpoints.
+ * @param {string} displayName - Agent display name
+ * @returns {THREE.Group|null}
+ */
+function findTileOwnedByName(displayName) {
+    if (!displayName) return null;
+    const allHexes = getHexagons();
+    let fallback = null;
+    for (const hex of allHexes) {
+        if (hex.userData.owner_name === displayName) {
+            // Prefer capital
+            if (hex.userData.is_capital) return hex;
+            if (!fallback) fallback = hex;
+        }
+    }
+    return fallback;
+}
+
+// =============================================================================
 // WEBSOCKET MESSAGE HANDLERS
 // =============================================================================
 
@@ -378,13 +438,84 @@ function setupWebSocketHandlers() {
         console.log('Game event:', data.event.description);
         addEventToFeed(data.event);
         // Dispatch for panel
-        window.dispatchEvent(new CustomEvent('conquest-action', { detail: data.event }));
+        window.dispatchEvent(new CustomEvent('clawquest-action', { detail: data.event }));
+
+        // --- Trigger visual effects based on event type ---
+        const event = data.event;
+        const eventData = event.data || {};
+
+        if (event.type === 'attack_declared' || event.type === 'attack_success' || event.type === 'attack_failed') {
+            // Attack animation: find attacker's adjacent tile as "from", target tile as "to"
+            const targetTile = eventData.tile;
+            if (targetTile) {
+                const toHex = getHexAt(targetTile.q, targetTile.r);
+                if (toHex) {
+                    // actor_id is the attacker's agent ID (set by logEvent on server)
+                    // eventData.attacker_id exists on attack_declared, actor_id on all
+                    const attackerId = eventData.attacker_id || event.actor_id;
+                    const fromHex = findAdjacentOwnedBy(targetTile.q, targetTile.r, attackerId);
+                    const isSuccess = event.type === 'attack_success';
+                    
+                    if (fromHex) {
+                        triggerAttackEffect(fromHex, toHex, 0xe53e6b, isSuccess);
+                    } else {
+                        // Fallback: play impact centered on the target tile
+                        triggerAttackEffect(toHex, toHex, 0xe53e6b, isSuccess);
+                    }
+                    console.log(`[FX] Attack animation: ${event.type} at (${targetTile.q}, ${targetTile.r})`);
+                }
+            }
+        }
+
+        if (event.type === 'gift') {
+            // Gift animation: draw route between involved tiles or agent capitals
+            const tileLoc = eventData.tile;
+            if (tileLoc) {
+                // Tile gift: animate from any tile owned by sender to the gifted tile
+                const giftedHex = getHexAt(tileLoc.q, tileLoc.r);
+                if (giftedHex) {
+                    const fromHex = findTileOwnedByName(eventData.from);
+                    if (fromHex && fromHex !== giftedHex) {
+                        triggerTradeRoute(fromHex, giftedHex, 0x9b59b6); // purple for gifts
+                        console.log(`[FX] Gift route animation to (${tileLoc.q}, ${tileLoc.r})`);
+                    }
+                }
+            } else if (eventData.food !== undefined || eventData.metal !== undefined) {
+                // Resource gift: animate between representative tiles of the two agents
+                const fromHex = findTileOwnedByName(eventData.from);
+                const toHex = findTileOwnedByName(eventData.to);
+                if (fromHex && toHex && fromHex !== toHex) {
+                    triggerTradeRoute(fromHex, toHex, 0xdd8844); // amber for resource trade
+                    console.log(`[FX] Trade route animation: ${eventData.from} → ${eventData.to}`);
+                }
+            }
+        }
+
+        if (event.type === 'trade_accepted') {
+            // Trade completed: animate route between the two agents' territories
+            const fromHex = findTileOwnedByName(eventData.from);
+            const toHex = findTileOwnedByName(eventData.to);
+            if (fromHex && toHex && fromHex !== toHex) {
+                triggerTradeRoute(fromHex, toHex, 0x00e5cc); // teal for trade
+                console.log(`[FX] Trade route: ${eventData.from} ↔ ${eventData.to}`);
+            }
+        }
+
+        if (event.type === 'trade_proposed') {
+            // Trade proposed: subtle route preview between the two agents
+            const fromHex = findTileOwnedByName(eventData.from);
+            const toHex = findTileOwnedByName(eventData.to);
+            if (fromHex && toHex && fromHex !== toHex) {
+                triggerTradeRoute(fromHex, toHex, 0x00e5cc); // teal for trade
+                console.log(`[FX] Trade proposal route: ${eventData.from} → ${eventData.to}`);
+            }
+        }
     });
     
     onMessage('message_sent', (data) => {
         console.log('Message sent:', data.message);
         // Dispatch for panel activity feed
-        window.dispatchEvent(new CustomEvent('conquest-message', { detail: data.message }));
+        window.dispatchEvent(new CustomEvent('clawquest-message', { detail: data.message }));
     });
     
     onMessage('agent_joined', (data) => {
@@ -394,22 +525,67 @@ function setupWebSocketHandlers() {
     
     onMessage('territory_changed', () => {
         loadMapFromServer();
+        updateLeaderboard();
     });
     
     onMessage('map_expanded', () => {
         console.log('Map expanded - reloading tiles...');
         loadMapFromServer();
+        updateLeaderboard();
     });
     
     onMessage('dashboard_reply', (data) => {
         console.log('Dashboard reply from agent:', data);
         // Dispatch for panel chat
-        window.dispatchEvent(new CustomEvent('conquest-dashboard-reply', { detail: data }));
+        window.dispatchEvent(new CustomEvent('clawquest-dashboard-reply', { detail: data }));
     });
     
     onMessage('default', (data) => {
         console.log('WS event:', data);
     });
+}
+
+// =============================================================================
+// LEADERBOARD
+// =============================================================================
+
+const LB_COLORS = [
+    '#ff3366', '#ff9933', '#cc66ff', '#33ccff',
+    '#ff3333', '#ffcc00', '#00ffaa', '#ff00cc',
+];
+const lbColorMap = new Map();
+let lbColorIdx = 0;
+
+function getLbColor(agentId) {
+    if (!lbColorMap.has(agentId)) {
+        lbColorMap.set(agentId, LB_COLORS[lbColorIdx % LB_COLORS.length]);
+        lbColorIdx++;
+    }
+    return lbColorMap.get(agentId);
+}
+
+async function updateLeaderboard() {
+    try {
+        const res = await fetch(`${window.location.origin}/api/map/agents`);
+        if (!res.ok) return;
+        const agents = await res.json();
+
+        const container = document.getElementById('lb-entries');
+        if (!container) return;
+
+        container.innerHTML = agents.map((agent, i) => {
+            const isYou = currentAgent && agent.id === currentAgent.id;
+            const color = isYou ? '#00e5cc' : getLbColor(agent.id);
+            return `<div class="lb-entry${isYou ? ' lb-you' : ''}">
+                <span class="lb-rank">${i + 1}</span>
+                <span class="lb-dot" style="background:${color};color:${color}"></span>
+                <span class="lb-name">${agent.display_name}</span>
+                <span class="lb-tiles">${agent.territory_count}</span>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        // silent
+    }
 }
 
 // =============================================================================
@@ -438,11 +614,28 @@ function setupEventHandlers() {
             if (hexGroup) {
                 updateSelectionMarker(hexGroup);
             }
+            
+            // Broadcast tile selection to panel
+            window.dispatchEvent(new CustomEvent('clawquest-tile-selected', { 
+                detail: {
+                    q: clickedTile.q,
+                    r: clickedTile.r,
+                    id: clickedTile.id,
+                    type: clickedTile.type,
+                    owner_id: clickedTile.owner_id,
+                    owner_name: clickedTile.owner_name,
+                    fortification: clickedTile.fortification,
+                    is_capital: clickedTile.is_capital
+                }
+            }));
         } else {
             // Deselect
             selectedHex = null;
             updateInfoPanel(null);
             updateSelectionMarker(null);
+            
+            // Broadcast deselection to panel
+            window.dispatchEvent(new CustomEvent('clawquest-tile-selected', { detail: null }));
         }
     });
 
@@ -468,7 +661,7 @@ function setupEventHandlers() {
 // =============================================================================
 
 async function init() {
-    console.log('CONQUEST - Initializing...');
+    console.log('CLAWQUEST - Initializing...');
     
     // Setup WebSocket handlers
     setupWebSocketHandlers();
@@ -479,13 +672,19 @@ async function init() {
     // Load map from server
     await loadMapFromServer();
     
+    // Load leaderboard
+    await updateLeaderboard();
+    
     // Connect WebSocket for real-time updates
     connectWebSocket();
     
     // Start animation loop
     startAnimationLoop();
     
-    console.log('CONQUEST - Ready');
+    // Refresh leaderboard periodically
+    setInterval(updateLeaderboard, 15000);
+    
+    console.log('CLAWQUEST - Ready');
 }
 
 // Start the game
@@ -495,23 +694,25 @@ init();
 // EXPOSE FUNCTIONS FOR DEBUGGING
 // =============================================================================
 
-window.conquest = {
+window.clawquest = {
     loadMap: loadMapFromServer,
     setAgent: (agent) => {
         currentAgent = agent;
         loadMapFromServer();
     },
     getHexAt: getHexAt,
-    // Test claim effect — simulates a full claim on any tile
-    // Usage: conquest.testEffect(0, 0)
-    testEffect: (q, r) => {
+
+    // =========================================================================
+    // DEMO: Expansion (claim effect)
+    // Usage: clawquest.demoExpansion(0, 0)
+    // =========================================================================
+    demoExpansion: (q, r) => {
         const existing = getHexAt(q, r);
         if (!existing) {
             console.log(`No tile at (${q}, ${r}). Try other coordinates.`);
             return;
         }
         
-        // Simulate a claim: remove old tile, create a new claimed tile, trigger effect
         const claimColor = 0x00e5cc;
         removeHexFromScene(q, r);
         
@@ -527,6 +728,53 @@ window.conquest = {
         triggerClaimEffect(hex, claimColor);
         rebuildBorders();
         
-        console.log(`Simulated claim at (${q}, ${r})`);
+        console.log(`[DEMO] Expansion at (${q}, ${r})`);
+    },
+
+    // =========================================================================
+    // DEMO: Trade Route
+    // Usage: clawquest.demoTradeRoute(fromQ, fromR, toQ, toR)
+    // Example: clawquest.demoTradeRoute(0, 0, 3, -2)
+    // =========================================================================
+    demoTradeRoute: (fromQ, fromR, toQ, toR, color) => {
+        const fromHex = getHexAt(fromQ, fromR);
+        const toHex = getHexAt(toQ, toR);
+        if (!fromHex) {
+            console.log(`No tile at source (${fromQ}, ${fromR}).`);
+            return;
+        }
+        if (!toHex) {
+            console.log(`No tile at destination (${toQ}, ${toR}).`);
+            return;
+        }
+        
+        triggerTradeRoute(fromHex, toHex, color || 0x00e5cc);
+        console.log(`[DEMO] Trade route from (${fromQ},${fromR}) → (${toQ},${toR})`);
+    },
+
+    // =========================================================================
+    // DEMO: Attack
+    // Usage: clawquest.demoAttack(fromQ, fromR, toQ, toR, success?)
+    // Example: clawquest.demoAttack(0, 0, 2, -1, true)
+    // =========================================================================
+    demoAttack: (fromQ, fromR, toQ, toR, success) => {
+        const fromHex = getHexAt(fromQ, fromR);
+        const toHex = getHexAt(toQ, toR);
+        if (!fromHex) {
+            console.log(`No tile at attacker (${fromQ}, ${fromR}).`);
+            return;
+        }
+        if (!toHex) {
+            console.log(`No tile at target (${toQ}, ${toR}).`);
+            return;
+        }
+        
+        triggerAttackEffect(fromHex, toHex, 0xe53e6b, success !== false);
+        console.log(`[DEMO] Attack from (${fromQ},${fromR}) → (${toQ},${toR}) [${success !== false ? 'SUCCESS' : 'FAILED'}]`);
+    },
+
+    // Keep old alias for backwards compat
+    testEffect: (q, r) => {
+        window.clawquest.demoExpansion(q, r);
     },
 };
