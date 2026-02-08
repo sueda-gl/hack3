@@ -29,7 +29,8 @@ import {
     addStructureToHex,
     removeStructureFromHex,
     setOrbitTarget,
-    setControlsEnabled
+    setControlsEnabled,
+    triggerClaimEffect
 } from './graphics.js';
 
 import {
@@ -230,6 +231,11 @@ function showWelcomeOverlay() {
  * @param {object} tileData - The tile data from server
  */
 function updateTile(tileData) {
+    // Check if this is a claim (unclaimed → owned)
+    const existingHex = getHexAt(tileData.q, tileData.r);
+    const wasClaimed = existingHex?.userData?.owner_id || null;
+    const isClaim = !wasClaimed && tileData.owner_id;
+    
     // Remove existing hex at this position
     removeHexFromScene(tileData.q, tileData.r);
     
@@ -239,7 +245,6 @@ function updateTile(tileData) {
     const isGlowing = currentAgent && tileData.owner_id === currentAgent.id;
     
     const hex = createHexagonTile(tileData.q, tileData.r, color, isPlayerTile, isGlowing);
-    // Using direct assignment to ensure properties are set correctly
     hex.userData.id = tileData.id;
     hex.userData.type = tileData.terrain;
     hex.userData.owner_id = tileData.owner_id;
@@ -247,11 +252,17 @@ function updateTile(tileData) {
     hex.userData.fortification = tileData.fortification;
     hex.userData.is_capital = tileData.is_capital || false;
     
-    // Reset scale for spawn animation
-    hex.scale.set(0.01, 0.01, 0.01);
-    hex.userData.spawnTime = Date.now();
-    
-    addHexToScene(hex);
+    if (isClaim) {
+        // Claim animation: beacon pillar + tile rises from unclaimed height
+        // triggerClaimEffect sets scale and rise animation internally
+        addHexToScene(hex);
+        triggerClaimEffect(hex, color);
+    } else {
+        // Normal update: standard spawn animation
+        hex.scale.set(0.01, 0.01, 0.01);
+        hex.userData.spawnTime = Date.now();
+        addHexToScene(hex);
+    }
     
     // Place cyber structure on capital tiles
     if (tileData.is_capital) {
@@ -385,6 +396,11 @@ function setupWebSocketHandlers() {
         loadMapFromServer();
     });
     
+    onMessage('map_expanded', () => {
+        console.log('Map expanded - reloading tiles...');
+        loadMapFromServer();
+    });
+    
     onMessage('dashboard_reply', (data) => {
         console.log('Dashboard reply from agent:', data);
         // Dispatch for panel chat
@@ -486,4 +502,31 @@ window.conquest = {
         loadMapFromServer();
     },
     getHexAt: getHexAt,
+    // Test claim effect — simulates a full claim on any tile
+    // Usage: conquest.testEffect(0, 0)
+    testEffect: (q, r) => {
+        const existing = getHexAt(q, r);
+        if (!existing) {
+            console.log(`No tile at (${q}, ${r}). Try other coordinates.`);
+            return;
+        }
+        
+        // Simulate a claim: remove old tile, create a new claimed tile, trigger effect
+        const claimColor = 0x00e5cc;
+        removeHexFromScene(q, r);
+        
+        const hex = createHexagonTile(q, r, claimColor, true, true);
+        hex.userData.id = existing.userData.id;
+        hex.userData.type = existing.userData.type;
+        hex.userData.owner_id = 'test';
+        hex.userData.owner_name = 'TEST';
+        hex.userData.fortification = 0;
+        hex.userData.is_capital = false;
+        
+        addHexToScene(hex);
+        triggerClaimEffect(hex, claimColor);
+        rebuildBorders();
+        
+        console.log(`Simulated claim at (${q}, ${r})`);
+    },
 };

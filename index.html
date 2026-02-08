@@ -94,7 +94,7 @@
         /* ===== RIGHT PANEL ===== */
         #agent-panel {
             width: 350px;
-            max-height: 400px; /* Reduced max-height */
+            max-height: 500px;
             position: absolute;
             top: 20px;
             right: 20px;
@@ -278,6 +278,22 @@
             font-size: 13px;
             color: #e2e8f0;
             line-height: 1.5;
+        }
+        .chat-message .content strong {
+            color: #fff;
+            font-weight: 600;
+        }
+        .chat-message .content em {
+            color: #a0aec0;
+            font-style: italic;
+        }
+        .chat-message .content code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #00e5cc;
         }
         .chat-message .time {
             font-size: 10px;
@@ -516,6 +532,22 @@
             color: #c9d1d9;
             line-height: 1.5;
         }
+        .thread-msg-content strong {
+            color: #fff;
+            font-weight: 600;
+        }
+        .thread-msg-content em {
+            color: #a0aec0;
+            font-style: italic;
+        }
+        .thread-msg-content code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #00e5cc;
+        }
         
         /* Empty state */
         .empty-state {
@@ -542,6 +574,83 @@
         #connections-list::-webkit-scrollbar-thumb:hover,
         #thread-messages::-webkit-scrollbar-thumb:hover {
             background: #4a5568;
+        }
+        
+        /* ===== SKILLS EDITOR ===== */
+        #skills-editor-container {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            padding: 12px 16px;
+            gap: 10px;
+        }
+        #skills-textarea {
+            flex: 1;
+            min-height: 150px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(45, 55, 72, 0.6);
+            border-radius: 4px;
+            padding: 12px;
+            color: #e2e8f0;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            resize: none;
+        }
+        #skills-textarea:focus {
+            outline: none;
+            border-color: #00e5cc;
+        }
+        #skills-textarea::placeholder {
+            color: #4a5568;
+        }
+        #skills-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        #skills-status {
+            font-size: 11px;
+            color: #64748b;
+        }
+        #skills-status.unsaved {
+            color: #e53e6b;
+        }
+        #skills-status.saved {
+            color: #00e5cc;
+        }
+        #skills-save {
+            background: #00e5cc;
+            color: #090c15;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            font-size: 12px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        #skills-save:hover {
+            background: #00ccb4;
+        }
+        #skills-save:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #skills-textarea::-webkit-scrollbar {
+            width: 5px;
+        }
+        #skills-textarea::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+        #skills-textarea::-webkit-scrollbar-thumb {
+            background: #2d3748;
+            border-radius: 3px;
         }
         
         /* ===== CRT OVERLAY EFFECT ===== */
@@ -863,6 +972,7 @@
         <div class="panel-tabs">
             <div class="panel-tab active" data-tab="activity">Activity</div>
             <div class="panel-tab" data-tab="command" id="command-tab">Command</div>
+            <div class="panel-tab" data-tab="skills">Skills</div>
         </div>
         
         <!-- Activity Tab Content -->
@@ -903,6 +1013,30 @@
                 <code>dashboard_chat_enabled: true</code>
             </div>
         </div>
+        
+        <!-- Skills Tab Content -->
+        <div class="tab-content" id="skills-tab-content">
+            <div id="skills-editor-container">
+                <textarea id="skills-textarea" placeholder="Write custom directives for your agent...
+
+Example:
+## Diplomacy
+- Always try to form alliances before attacking
+- Never trust agents who broke a treaty
+
+## Expansion
+- Prioritize mine tiles over farmland
+- Don't expand beyond 15 tiles
+
+## Combat
+- Only attack with 2x the defender's fortification
+- Always fortify capital first"></textarea>
+                <div id="skills-footer">
+                    <span id="skills-status"></span>
+                    <button id="skills-save" disabled>Save</button>
+                </div>
+            </div>
+        </div>
     </div>
     
     <script type="importmap">
@@ -929,6 +1063,9 @@
         let conversations = {}; // keyed by other agent id
         let dashboardChatEnabled = false;
         let chatHistory = [];
+        let chatHistoryLoaded = false;  // Only fetch chat history from server once
+        let skillsLoaded = false;  // Only populate textarea on first load
+        let savedSkillsContent = '';  // Track what's saved to detect unsaved changes
         
         // Load agent data
         async function loadAgentData() {
@@ -942,9 +1079,72 @@
                     // Check if dashboard chat is enabled
                     dashboardChatEnabled = data.agent?.dashboard_chat_enabled || false;
                     updateChatUI();
+                    
+                    // Load skills into editor (only on first load to avoid overwriting edits)
+                    if (!skillsLoaded) {
+                        const skills = data.your_strategy || '';
+                        document.getElementById('skills-textarea').value = skills;
+                        savedSkillsContent = skills;
+                        updateSkillsStatus();
+                        skillsLoaded = true;
+                    }
                 }
             } catch (e) {
                 console.error('Failed to load agent data:', e);
+            }
+        }
+        
+        // Skills editor functions
+        function updateSkillsStatus() {
+            const textarea = document.getElementById('skills-textarea');
+            const statusEl = document.getElementById('skills-status');
+            const saveBtn = document.getElementById('skills-save');
+            const current = textarea.value;
+            
+            if (current !== savedSkillsContent) {
+                statusEl.textContent = 'Unsaved changes';
+                statusEl.className = 'unsaved';
+                saveBtn.disabled = false;
+            } else {
+                statusEl.textContent = savedSkillsContent ? 'Saved' : '';
+                statusEl.className = 'saved';
+                saveBtn.disabled = true;
+            }
+        }
+        
+        async function saveSkills() {
+            const textarea = document.getElementById('skills-textarea');
+            const statusEl = document.getElementById('skills-status');
+            const saveBtn = document.getElementById('skills-save');
+            const content = textarea.value;
+            
+            saveBtn.disabled = true;
+            statusEl.textContent = 'Saving...';
+            statusEl.className = '';
+            
+            try {
+                const res = await fetch(`/api/action/${AGENT_ID}/strategy`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ strategy: content })
+                });
+                
+                if (res.ok) {
+                    savedSkillsContent = content;
+                    statusEl.textContent = 'Saved';
+                    statusEl.className = 'saved';
+                    saveBtn.disabled = true;
+                } else {
+                    const err = await res.json();
+                    statusEl.textContent = 'Error: ' + (err.error || 'Failed to save');
+                    statusEl.className = 'unsaved';
+                    saveBtn.disabled = false;
+                }
+            } catch (e) {
+                console.error('Failed to save skills:', e);
+                statusEl.textContent = 'Error: Failed to save';
+                statusEl.className = 'unsaved';
+                saveBtn.disabled = false;
             }
         }
         
@@ -958,7 +1158,13 @@
                 commandTab.classList.remove('disabled');
                 chatContainer.classList.remove('hidden');
                 chatDisabled.classList.add('hidden');
-                loadChatHistory();
+                // Only load chat history from server once (on first enable).
+                // After that, local state is maintained by sendChatMessage().
+                // This prevents the 30-second refresh from clobbering local messages.
+                if (!chatHistoryLoaded) {
+                    chatHistoryLoaded = true;
+                    loadChatHistory();
+                }
             } else {
                 commandTab.classList.add('disabled');
                 chatContainer.classList.add('hidden');
@@ -1000,7 +1206,7 @@
                 return `
                     <div class="chat-message ${cssClass}">
                         <div class="sender">${sender}</div>
-                        <div class="content">${escapeHtml(msg.content)}</div>
+                        <div class="content">${parseMarkdown(msg.content)}</div>
                         <div class="time">${timeStr}</div>
                     </div>
                 `;
@@ -1017,7 +1223,33 @@
             return div.innerHTML;
         }
         
-        // Send chat message
+        // Parse simple markdown to HTML (safe - escapes HTML first)
+        function parseMarkdown(text) {
+            // First escape HTML to prevent XSS
+            let html = escapeHtml(text);
+            
+            // Bold: **text** or __text__
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
+            
+            // Italic: *text* or _text_ (but not inside words)
+            html = html.replace(/(?<!\w)\*([^*]+?)\*(?!\w)/g, '<em>$1</em>');
+            html = html.replace(/(?<!\w)_([^_]+?)_(?!\w)/g, '<em>$1</em>');
+            
+            // Inline code: `code`
+            html = html.replace(/`([^`]+?)`/g, '<code>$1</code>');
+            
+            // Line breaks: convert newlines to <br>
+            html = html.replace(/\n/g, '<br>');
+            
+            // Bullet points: lines starting with - or * or •
+            html = html.replace(/^[-*•]\s+/gm, '&bull; ');
+            html = html.replace(/<br>[-*•]\s+/g, '<br>&bull; ');
+            
+            return html;
+        }
+        
+        // Send chat message (synchronous — calls OpenClaw chat completions directly)
         async function sendChatMessage() {
             const input = document.getElementById('chat-input');
             const sendBtn = document.getElementById('chat-send');
@@ -1026,10 +1258,21 @@
             const content = input.value.trim();
             if (!content) return;
             
-            // Disable input while sending
+            // Disable input while waiting for agent response
             input.disabled = true;
             sendBtn.disabled = true;
-            statusEl.textContent = 'Sending...';
+            statusEl.textContent = 'Thinking...';
+            
+            // Add human message to chat immediately
+            chatHistory.push({
+                agent_id: AGENT_ID,
+                direction: 'human_to_agent',
+                content: content,
+                status: 'delivered',
+                created_at: new Date().toISOString()
+            });
+            renderChatMessages();
+            input.value = '';
             
             try {
                 const res = await fetch(`/api/dashboard/${AGENT_ID}/send`, {
@@ -1040,36 +1283,37 @@
                 
                 if (res.ok) {
                     const data = await res.json();
-                    input.value = '';
                     
-                    // Add message to local history
-                    chatHistory.push({
-                        id: data.message_id,
-                        agent_id: AGENT_ID,
-                        direction: 'human_to_agent',
-                        content: content,
-                        status: 'pending',
-                        created_at: new Date().toISOString()
-                    });
-                    renderChatMessages();
-                    
-                    if (data.notification_sent) {
-                        statusEl.textContent = 'Sent! Agent notified, waiting for reply...';
-                    } else {
-                        statusEl.textContent = `Sent! (Notification: ${data.notification_reason || 'pending'})`;
+                    // Add agent reply to chat history
+                    if (data.reply) {
+                        chatHistory.push({
+                            id: data.message_id,
+                            agent_id: AGENT_ID,
+                            direction: 'agent_to_human',
+                            content: data.reply,
+                            status: 'delivered',
+                            created_at: new Date().toISOString()
+                        });
+                        renderChatMessages();
                     }
                     
-                    // Clear status after a few seconds
-                    setTimeout(() => {
-                        statusEl.textContent = '';
-                    }, 5000);
+                    statusEl.textContent = '';
                 } else {
                     const err = await res.json();
-                    statusEl.textContent = `Error: ${err.error}`;
+                    statusEl.textContent = `Error: ${err.error}${err.details ? ' — ' + err.details : ''}`;
+                    
+                    // Clear error after 8 seconds
+                    setTimeout(() => {
+                        statusEl.textContent = '';
+                    }, 8000);
                 }
             } catch (e) {
                 console.error('Failed to send message:', e);
-                statusEl.textContent = 'Failed to send message';
+                statusEl.textContent = 'Failed to reach agent';
+                
+                setTimeout(() => {
+                    statusEl.textContent = '';
+                }, 5000);
             } finally {
                 input.disabled = false;
                 sendBtn.disabled = false;
@@ -1218,7 +1462,7 @@
                             <span class="thread-msg-sender">${senderName}</span>
                             <span class="thread-msg-time">${timeStr}</span>
                         </div>
-                        <div class="thread-msg-content">${msg.content}</div>
+                        <div class="thread-msg-content">${parseMarkdown(msg.content)}</div>
                     </div>
                 `;
             }).join('');
@@ -1354,6 +1598,10 @@
                 sendChatMessage();
             }
         });
+        
+        // Skills editor handlers
+        document.getElementById('skills-textarea').addEventListener('input', updateSkillsStatus);
+        document.getElementById('skills-save').addEventListener('click', saveSkills);
         
         // Listen for dashboard reply events from WebSocket
         window.addEventListener('conquest-dashboard-reply', (e) => {

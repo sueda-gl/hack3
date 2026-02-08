@@ -276,11 +276,15 @@ export async function notifyDashboardMessage(
 
 "${preview}"
 
-To respond:
-1. Fetch pending messages: GET ${BASE_URL}/api/dashboard/${agentId}/pending
-2. Process and reply: POST ${BASE_URL}/api/dashboard/${agentId}/reply with { "content": "Your response" }
+IMPORTANT: You MUST make these API calls to respond. Do NOT just generate a response — you must actually POST it.
 
-The human is waiting for your response via the CONQUEST dashboard.`;
+Step 1 — Fetch the full message:
+curl ${BASE_URL}/api/dashboard/${agentId}/pending
+
+Step 2 — Send your reply (REQUIRED — the human cannot see your response unless you do this):
+curl -X POST ${BASE_URL}/api/dashboard/${agentId}/reply -H "Content-Type: application/json" -d '{"content": "YOUR REPLY HERE"}'
+
+Replace "YOUR REPLY HERE" with your actual response. The human is watching the dashboard and will only see your reply if you POST it to the reply endpoint above.`;
 
   return notifyAgent(agentId, 'dashboard_message', message);
 }

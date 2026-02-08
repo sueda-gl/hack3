@@ -35,6 +35,9 @@ function initializeDatabase() {
       webhook_url TEXT,
       webhook_token TEXT,
       
+      -- OpenClaw gateway API token (for /v1/chat/completions - dashboard chat)
+      gateway_token TEXT,
+      
       -- Human-provided strategy for the agent
       custom_strategy TEXT,
       
@@ -202,6 +205,22 @@ function initializeDatabase() {
   } catch (e) {
     // Column already exists, ignore
   }
+
+  // Migration: Add gateway_token column if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE agents ADD COLUMN gateway_token TEXT`);
+    console.log('Migration: Added gateway_token column to agents');
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
+  // Migration: Add grid_radius to game_state if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE game_state ADD COLUMN grid_radius INTEGER DEFAULT 8`);
+    console.log('Migration: Added grid_radius column to game_state');
+  } catch (e) {
+    // Column already exists, ignore
+  }
 }
 
 // Generate hexagonal grid
@@ -235,6 +254,95 @@ function randomTerrain(): string {
   if (rand < 0.45) return 'mine';      // 20% - metal production
   if (rand < 0.55) return 'mixed';     // 10% - both resources
   return 'barren';                      // 45% - minimal resources
+}
+
+// =============================================================================
+// MAP EXPANSION
+// =============================================================================
+
+/**
+ * Get coordinates for all tiles at exactly hex distance `d` from origin.
+ * Uses the standard hex ring walk algorithm:
+ *   Start at axial(-d, d), walk 6 edges of `d` steps each.
+ */
+function getHexRingCoords(d: number): Array<{ q: number; r: number }> {
+  if (d === 0) return [{ q: 0, r: 0 }];
+
+  // Direction vectors for walking around the ring (clockwise)
+  const directions = [
+    { q: 1, r: 0 },
+    { q: 1, r: -1 },
+    { q: 0, r: -1 },
+    { q: -1, r: 0 },
+    { q: -1, r: 1 },
+    { q: 0, r: 1 },
+  ];
+
+  const coords: Array<{ q: number; r: number }> = [];
+  let q = -d;
+  let r = d;
+
+  for (const dir of directions) {
+    for (let step = 0; step < d; step++) {
+      coords.push({ q, r });
+      q += dir.q;
+      r += dir.r;
+    }
+  }
+
+  return coords;
+}
+
+/**
+ * Get the current grid radius from game_state.
+ */
+export function getGridRadius(): number {
+  const row = db.prepare('SELECT grid_radius FROM game_state WHERE id = 1').get() as { grid_radius: number } | undefined;
+  return row?.grid_radius ?? 8;
+}
+
+/**
+ * Get the number of unclaimed tiles on the map.
+ */
+export function getUnclaimedCount(): number {
+  const row = db.prepare('SELECT COUNT(*) as count FROM tiles WHERE owner_id IS NULL').get() as { count: number };
+  return row.count;
+}
+
+/**
+ * Expand the hex grid by adding new rings of tiles around the current border.
+ * @param rings - Number of new rings to add (default: 2)
+ * @returns Object with the new radius and count of tiles added
+ */
+export function expandGrid(rings: number = 2): { newRadius: number; tilesAdded: number } {
+  const currentRadius = getGridRadius();
+  const newRadius = currentRadius + rings;
+
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO tiles (q, r, terrain, owner_id, fortification)
+    VALUES (?, ?, ?, NULL, 0)
+  `);
+
+  let tilesAdded = 0;
+
+  const expandTransaction = db.transaction(() => {
+    // Generate tiles for each new ring
+    for (let d = currentRadius + 1; d <= newRadius; d++) {
+      const ringCoords = getHexRingCoords(d);
+      for (const { q, r } of ringCoords) {
+        const result = insert.run(q, r, randomTerrain());
+        if (result.changes > 0) tilesAdded++;
+      }
+    }
+
+    // Update the stored grid radius
+    db.prepare('UPDATE game_state SET grid_radius = ? WHERE id = 1').run(newRadius);
+  });
+
+  expandTransaction();
+
+  console.log(`[Map] Expanded grid: radius ${currentRadius} → ${newRadius} (+${tilesAdded} tiles)`);
+  return { newRadius, tilesAdded };
 }
 
 // Initialize on import

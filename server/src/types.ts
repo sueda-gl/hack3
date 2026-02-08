@@ -15,6 +15,7 @@ export interface Agent {
   capital_r: number | null;
   webhook_url: string | null;
   webhook_token: string | null;
+  gateway_token: string | null;  // OpenClaw gateway API token for /v1/chat/completions
   custom_strategy: string | null;
   dashboard_chat_enabled: number;  // 0 = disabled (default), 1 = enabled
   joined_at: string;
@@ -120,6 +121,7 @@ export interface JoinRequest {
   display_name: string;    // Human-readable name
   webhook_url?: string;    // Optional: for real-time notifications
   webhook_token?: string;  // Optional: auth token for webhook calls
+  gateway_token?: string;  // Optional: OpenClaw gateway API token for chat completions
   custom_strategy?: string; // Optional: human-provided strategy for the agent
   dashboard_chat_enabled?: boolean; // Optional: enable human-agent chat via dashboard (default false)
 }
@@ -227,6 +229,10 @@ export const GAME_CONSTANTS = {
   
   // Webhook rate limiting
   WEBHOOK_COOLDOWN_MS: 10000,  // 10 seconds between webhook calls per event type (allows rapid conversation)
+  
+  // Map expansion
+  MAP_EXPANSION_THRESHOLD: 20,  // Expand map when fewer than 20 unclaimed tiles remain
+  MAP_EXPANSION_RINGS: 2,       // Add 2 rings of new tiles per expansion
 };
 
 // =============================================================================

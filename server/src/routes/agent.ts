@@ -18,8 +18,9 @@ import type {
 } from '../types.js';
 import { GAME_CONSTANTS } from '../types.js';
 import { getPendingTrades } from '../game/communication.js';
-import { broadcastAgentJoined } from '../game/broadcast.js';
+import { broadcastAgentJoined, broadcastMapExpanded } from '../game/broadcast.js';
 import { getNeighbors } from '../game/actions.js';
+import { getUnclaimedCount, expandGrid } from '../db/database.js';
 
 const router = Router();
 
@@ -51,7 +52,7 @@ function getAgentById(id: string): Agent | null {
 
 router.post('/join', (req: Request, res: Response) => {
   const body = req.body as JoinRequest;
-  const { agent_id, display_name, webhook_url, webhook_token, custom_strategy, dashboard_chat_enabled } = body;
+  const { agent_id, display_name, webhook_url, webhook_token, gateway_token, custom_strategy, dashboard_chat_enabled } = body;
 
   // Validate agent_id
   if (!agent_id || typeof agent_id !== 'string' || agent_id.trim().length < 2) {
@@ -82,10 +83,20 @@ router.post('/join', (req: Request, res: Response) => {
     return;
   }
 
-  // Find starting tile
+  // Check if map needs expansion before finding a starting tile
+  const unclaimed = getUnclaimedCount();
+  let mapExpanded = false;
+  if (unclaimed < GAME_CONSTANTS.MAP_EXPANSION_THRESHOLD) {
+    const { newRadius, tilesAdded } = expandGrid(GAME_CONSTANTS.MAP_EXPANSION_RINGS);
+    console.log(`[Map] Expanded for new player: +${tilesAdded} tiles (radius now ${newRadius})`);
+    mapExpanded = true;
+  }
+
+  // Find starting tile (prefers unclaimed tiles nearest to center)
   const startingTile = findStartingTile();
   if (!startingTile) {
-    res.status(503).json({ error: 'No available tiles. Map is full.' });
+    // This should never happen after expansion, but handle gracefully
+    res.status(503).json({ error: 'No available tiles. Map expansion failed.' });
     return;
   }
 
@@ -93,9 +104,9 @@ router.post('/join', (req: Request, res: Response) => {
     const joinTransaction = db.transaction(() => {
       // Insert agent
       db.prepare(`
-        INSERT INTO agents (id, display_name, food, metal, webhook_url, webhook_token, custom_strategy, dashboard_chat_enabled)
-        VALUES (?, ?, 100, 50, ?, ?, ?, ?)
-      `).run(trimmedId, trimmedName, webhook_url || null, webhook_token || null, custom_strategy || null, dashboard_chat_enabled ? 1 : 0);
+        INSERT INTO agents (id, display_name, food, metal, webhook_url, webhook_token, gateway_token, custom_strategy, dashboard_chat_enabled)
+        VALUES (?, ?, 100, 50, ?, ?, ?, ?, ?)
+      `).run(trimmedId, trimmedName, webhook_url || null, webhook_token || null, gateway_token || null, custom_strategy || null, dashboard_chat_enabled ? 1 : 0);
 
       // Create empty memory for agent
       db.prepare(`
@@ -127,6 +138,11 @@ router.post('/join', (req: Request, res: Response) => {
 
     // Broadcast to connected clients
     broadcastAgentJoined({ id: trimmedId, display_name: trimmedName });
+
+    // If the map was expanded, tell all clients to reload their map
+    if (mapExpanded) {
+      broadcastMapExpanded();
+    }
 
     const response: JoinResponse = {
       success: true,

@@ -54,6 +54,13 @@ export function broadcastAgentJoined(agent: { id: string; display_name: string }
   });
 }
 
+// Broadcast map expanded (tells clients to reload the full map)
+export function broadcastMapExpanded() {
+  broadcastEvent({
+    type: 'map_expanded',
+  });
+}
+
 // Broadcast dashboard reply from agent to human
 export function broadcastDashboardReply(data: {
   agent_id: string;

@@ -536,6 +536,147 @@ const hexagons = [];
 const hexMap = new Map();
 
 // =============================================================================
+// TILE EFFECTS SYSTEM
+// =============================================================================
+
+const activeEffects = [];
+
+/**
+ * Trigger a tile claim effect on a hex tile.
+ * @param {THREE.Group} hex - The target hex tile group
+ * @param {number} [claimColor=0x00e5cc] - Color for the effect (owner color)
+ */
+/**
+ * Trigger a tile claim effect on a hex tile.
+ * Fires a beacon pillar and sets up the tile to rise from unclaimed → claimed height.
+ * @param {THREE.Group} hex - The target hex tile group (should be the NEW claimed tile)
+ * @param {number} [claimColor=0x00e5cc] - Color for the effect (owner color)
+ */
+export function triggerClaimEffect(hex, claimColor) {
+    if (!hex) return;
+    
+    const color = claimColor || hex.userData.color || 0x00e5cc;
+    
+    // --- SET UP TILE RISE: start flat, animate up to claimed height ---
+    hex.scale.set(1, 0.05, 1); // Start nearly flat
+    
+    // Flag for the rise animation (starts after beacon shoots up)
+    hex.userData.claimRise = {
+        startTime: Date.now() + 500,
+        duration: 1000,
+        startScaleY: 0.05,
+        endScaleY: 1.0,
+    };
+    
+    // --- BEACON PILLAR: vertical beam of light shoots up from the tile ---
+    const beamHeight = 8;
+    const beamGeo = new THREE.CylinderGeometry(0.15, 0.4, beamHeight, 6);
+    const beamMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide
+    });
+    
+    const beam = new THREE.Mesh(beamGeo, beamMat);
+    
+    // Position at the hex tile, oriented to planet surface
+    beam.position.copy(hex.position);
+    beam.quaternion.copy(hex.quaternion);
+    beam.translateY(0);
+    beam.scale.set(1, 0.01, 1);
+    
+    scene.add(beam);
+    
+    // Outer glow cylinder (wider, softer)
+    const glowGeo = new THREE.CylinderGeometry(0.4, 0.8, beamHeight, 6);
+    const glowMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: 0.3,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide
+    });
+    
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.position.copy(hex.position);
+    glow.quaternion.copy(hex.quaternion);
+    glow.translateY(0);
+    glow.scale.set(1, 0.01, 1);
+    
+    scene.add(glow);
+    
+    activeEffects.push({
+        type: 'beacon',
+        beam: beam,
+        glow: glow,
+        beamHeight: beamHeight,
+        startTime: Date.now(),
+        duration: 1800,
+    });
+}
+
+/**
+ * Update all active tile effects. Called from animation loop.
+ */
+function updateActiveEffects() {
+    for (let i = activeEffects.length - 1; i >= 0; i--) {
+        const effect = activeEffects[i];
+        const elapsed = Date.now() - effect.startTime;
+        const t = Math.min(elapsed / effect.duration, 1.0);
+        
+        if (effect.type === 'beacon') {
+            if (t < 0.3) {
+                // Phase 1: Beam shoots up fast (0 → 30%)
+                const riseT = t / 0.3;
+                const easedRise = 1 - Math.pow(1 - riseT, 2);
+                effect.beam.scale.set(1, easedRise, 1);
+                effect.glow.scale.set(1, easedRise, 1);
+                // Move beam up as it grows so base stays at tile
+                const yOffset = (easedRise * effect.beamHeight) / 2;
+                effect.beam.scale.y = easedRise;
+                effect.glow.scale.y = easedRise;
+            } else if (t < 0.5) {
+                // Phase 2: Hold bright (30% → 50%)
+                effect.beam.scale.set(1, 1, 1);
+                effect.glow.scale.set(1, 1, 1);
+                // Slight pulse
+                const pulseT = (t - 0.3) / 0.2;
+                const pulse = 1 + Math.sin(pulseT * Math.PI * 2) * 0.15;
+                effect.beam.scale.set(pulse, 1, pulse);
+                effect.glow.scale.set(pulse * 1.2, 1, pulse * 1.2);
+            } else {
+                // Phase 3: Fade out and thin (50% → 100%)
+                const fadeT = (t - 0.5) / 0.5;
+                const easedFade = fadeT * fadeT; // ease-in for snappy disappear
+                effect.beam.material.opacity = 0.9 * (1 - easedFade);
+                effect.glow.material.opacity = 0.3 * (1 - easedFade);
+                // Thin out
+                const thin = 1 - easedFade * 0.7;
+                effect.beam.scale.set(thin, 1, thin);
+                effect.glow.scale.set(thin, 1, thin);
+            }
+        }
+        
+        // Remove completed effects
+        if (t >= 1.0) {
+            if (effect.type === 'beacon') {
+                scene.remove(effect.beam);
+                scene.remove(effect.glow);
+                effect.beam.geometry.dispose();
+                effect.beam.material.dispose();
+                effect.glow.geometry.dispose();
+                effect.glow.material.dispose();
+            }
+            activeEffects.splice(i, 1);
+        }
+    }
+}
+
+// =============================================================================
 // TERRITORY BORDER SYSTEM
 // =============================================================================
 
@@ -1201,14 +1342,39 @@ export function startAnimationLoop() {
                     }
                 });
             }
-            // 1. Spawn Animation (Scale Up)
-            if (hex.scale.x < 1) {
+            // 1. Spawn Animation (Scale Up) — for initial map load
+            if (hex.scale.x < 1 && !hex.userData.claimRise) {
                 const delay = hex.userData.spawnDelay || 0;
                 if (now - hex.userData.spawnTime > delay) {
                     const speed = 0.06; // Balanced speed for visible but snappy animation
                     hex.scale.x = Math.min(1, hex.scale.x + speed);
                     hex.scale.y = Math.min(1, hex.scale.y + speed);
                     hex.scale.z = Math.min(1, hex.scale.z + speed);
+                }
+            }
+            
+            // 1b. Claim Rise Animation — tile rises from flat to claimed height
+            if (hex.userData.claimRise) {
+                const rise = hex.userData.claimRise;
+                const elapsed = now - rise.startTime;
+                
+                if (elapsed >= 0) {
+                    const t = Math.min(elapsed / rise.duration, 1.0);
+                    // Ease-out with slight overshoot then settle
+                    let easedT;
+                    if (t < 0.7) {
+                        easedT = (t / 0.7) * 1.08;
+                    } else {
+                        const settleT = (t - 0.7) / 0.3;
+                        easedT = 1.08 - 0.08 * settleT;
+                    }
+                    
+                    hex.scale.y = rise.startScaleY + (rise.endScaleY - rise.startScaleY) * Math.min(easedT, 1.08);
+                    
+                    if (t >= 1.0) {
+                        hex.scale.y = 1.0;
+                        delete hex.userData.claimRise;
+                    }
                 }
             }
 
@@ -1282,6 +1448,9 @@ export function startAnimationLoop() {
         if (animationCallback) {
             animationCallback(time);
         }
+        
+        // Update tile effects (shockwaves, beacons, etc.)
+        updateActiveEffects();
         
         // Update camera flight animation
         updateCameraFlight();
