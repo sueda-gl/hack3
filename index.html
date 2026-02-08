@@ -605,9 +605,235 @@
             0% { transform: translateY(-100%); }
             100% { transform: translateY(100%); }
         }
+        
+        /* ===== WELCOME OVERLAY ===== */
+        #welcome-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 5000;
+            background: rgba(9, 12, 21, 0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        #welcome-overlay.welcome-visible {
+            opacity: 1;
+        }
+        #welcome-overlay.welcome-fadeout {
+            opacity: 0;
+            transform: scale(1.03);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+            pointer-events: none;
+        }
+        
+        #welcome-content {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 28px;
+        }
+        
+        #welcome-title {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 96px;
+            font-weight: 700;
+            color: #00e5cc;
+            letter-spacing: 24px;
+            text-transform: uppercase;
+            position: relative;
+            opacity: 0;
+            text-shadow: 0 0 20px rgba(0, 229, 204, 0.4);
+            margin: 0;
+            line-height: 1;
+        }
+        .welcome-visible #welcome-title {
+            animation: glitchReveal 1.2s ease-out 0.3s forwards, titleFadeOut 1s ease-in 2.0s forwards;
+        }
+        
+        #welcome-divider {
+            display: none;
+        }
+        
+        #welcome-tagline {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 34px;
+            font-weight: 400;
+            color: #ffffff;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            opacity: 0;
+            margin: 0;
+            text-shadow: 0 0 30px rgba(255, 255, 255, 0.4), 0 0 60px rgba(0, 229, 204, 0.2);
+        }
+        #welcome-tagline .highlight {
+            color: #00e5cc;
+            text-shadow: 0 0 25px rgba(0, 229, 204, 0.7), 0 0 60px rgba(0, 229, 204, 0.3);
+        }
+        .welcome-visible #welcome-tagline {
+            animation: glitchReveal 1.2s ease-out 2.8s forwards;
+        }
+        
+        #welcome-hint {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            color: rgba(148, 163, 184, 0.5);
+            letter-spacing: 0.25em;
+            text-transform: uppercase;
+            opacity: 0;
+            margin: 0;
+            margin-top: 20px;
+        }
+        .welcome-visible #welcome-hint {
+            animation: fadeSlideUp 0.5s ease-out 4.5s forwards, pulseHint 2.5s ease-in-out 5.0s infinite;
+        }
+        
+        /* Glitch reveal: text sweeps in with chromatic jitter */
+        @keyframes glitchReveal {
+            0% {
+                opacity: 0;
+                clip-path: inset(0 100% 0 0);
+                text-shadow: -2px 0 #e53e6b, 2px 0 #00e5cc;
+            }
+            10% {
+                opacity: 1;
+                clip-path: inset(0 80% 0 0);
+            }
+            20% {
+                clip-path: inset(0 60% 0 0);
+                text-shadow: 3px 0 #e53e6b, -3px 0 #00e5cc;
+                transform: translateX(-4px);
+            }
+            25% {
+                transform: translateX(4px);
+                text-shadow: -4px 0 #e53e6b, 4px 0 #00e5cc;
+            }
+            30% {
+                clip-path: inset(0 40% 0 0);
+                transform: translateX(-2px);
+            }
+            40% {
+                clip-path: inset(0 20% 0 0);
+                text-shadow: 2px 0 #e53e6b, -2px 0 #00e5cc;
+                transform: translateX(0);
+            }
+            50% {
+                clip-path: inset(0 0% 0 0);
+                transform: translateX(3px);
+                text-shadow: -3px 0 #e53e6b, 3px 0 #00e5cc;
+            }
+            55% {
+                transform: translateX(-2px);
+                text-shadow: 2px 0 #e53e6b, -2px 0 #00e5cc;
+            }
+            60% {
+                transform: translateX(0);
+                text-shadow: 0 0 20px rgba(0, 229, 204, 0.5);
+            }
+            100% {
+                opacity: 1;
+                clip-path: inset(0 0% 0 0);
+                transform: translateX(0);
+                text-shadow: 0 0 40px rgba(0, 229, 204, 0.5), 0 0 80px rgba(0, 229, 204, 0.15);
+            }
+        }
+        
+        /* Title fades out completely and drifts up off screen */
+        @keyframes titleFadeOut {
+            0% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+            60% {
+                opacity: 0;
+                transform: translateY(-30px) scale(0.9);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-50px) scale(0.85);
+                height: 0;
+                margin: 0;
+                overflow: hidden;
+            }
+        }
+        
+        /* Horizontal divider sweeps open from center */
+        @keyframes dividerSweep {
+            from {
+                width: 0;
+                opacity: 0;
+            }
+            to {
+                width: 350px;
+                opacity: 1;
+            }
+        }
+        
+        /* Tagline sweeps in with a glow burst then settles */
+        @keyframes taglineSweepReveal {
+            0% {
+                opacity: 0;
+                clip-path: inset(0 100% 0 0);
+                text-shadow: none;
+                letter-spacing: 0.5em;
+            }
+            20% {
+                opacity: 1;
+                clip-path: inset(0 70% 0 0);
+                text-shadow: 0 0 40px rgba(0, 229, 204, 0.8);
+            }
+            50% {
+                clip-path: inset(0 30% 0 0);
+                text-shadow: 0 0 60px rgba(0, 229, 204, 0.7), 0 0 100px rgba(255, 255, 255, 0.3);
+                letter-spacing: 0.25em;
+            }
+            75% {
+                clip-path: inset(0 0% 0 0);
+                text-shadow: 0 0 80px rgba(0, 229, 204, 0.9), 0 0 120px rgba(255, 255, 255, 0.4);
+            }
+            100% {
+                opacity: 1;
+                clip-path: inset(0 0% 0 0);
+                letter-spacing: 0.2em;
+                text-shadow: 0 0 30px rgba(255, 255, 255, 0.4), 0 0 60px rgba(0, 229, 204, 0.25);
+            }
+        }
+        
+        @keyframes fadeSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes pulseHint {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
     </style>
 </head>
 <body>
+    <!-- Welcome Overlay (shown after intro flight) -->
+    <div id="welcome-overlay">
+        <div id="welcome-content">
+            <h1 id="welcome-title">CONQUEST</h1>
+            <div id="welcome-divider"></div>
+            <p id="welcome-tagline">THE WORLD'S FIRST <span class="highlight">AI</span> × <span class="highlight">HUMAN</span> COPLAY MMO</p>
+            <p id="welcome-hint">CLICK ANYWHERE TO ENTER</p>
+        </div>
+    </div>
+
     <!-- CRT Overlay -->
     <div id="crt-overlay"></div>
 

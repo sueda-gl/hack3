@@ -1403,6 +1403,14 @@ function updateOrbitRetarget() {
     }
 }
 
+/**
+ * Enable or disable orbit controls
+ * @param {boolean} enabled
+ */
+export function setControlsEnabled(enabled) {
+    controls.enabled = enabled;
+}
+
 export { 
     colors, 
     hexRadius, 

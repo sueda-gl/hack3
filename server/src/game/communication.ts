@@ -145,7 +145,10 @@ export function proposeTrade(
   }
   
   // Calculate expiry
-  const expiresAt = new Date(Date.now() + GAME_CONSTANTS.TRADE_EXPIRY_HOURS * 60 * 60 * 1000).toISOString();
+  // Use SQLite-compatible datetime format (space separator, no Z) so that
+  // the expires_at <= datetime('now') comparison in tick processor works correctly.
+  const expiresAt = new Date(Date.now() + GAME_CONSTANTS.TRADE_EXPIRY_HOURS * 60 * 60 * 1000)
+    .toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
   
   // Create trade proposal
   const result = db.prepare(`

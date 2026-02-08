@@ -28,7 +28,8 @@ import {
     flyCamera,
     addStructureToHex,
     removeStructureFromHex,
-    setOrbitTarget
+    setOrbitTarget,
+    setControlsEnabled
 } from './graphics.js';
 
 import {
@@ -184,8 +185,44 @@ function triggerIntroFlyover() {
     // No jarring re-center needed — the orbit target naturally arrives at (0,0,0)
     const endLookAt = new THREE.Vector3(0, 0, 0);
     flyCamera(targetPosition, targetLookAt, 5000, () => {
-        console.log('Intro flyover complete - controls enabled');
+        // Keep controls disabled — welcome screen takes over
+        setControlsEnabled(false);
+        showWelcomeOverlay();
+        console.log('Intro flyover complete - showing welcome screen');
     }, Math.PI, endLookAt);
+}
+
+/**
+ * Show the welcome overlay with staggered animations.
+ * Click anywhere to dismiss and enable game controls.
+ */
+function showWelcomeOverlay() {
+    const overlay = document.getElementById('welcome-overlay');
+    if (!overlay) return;
+    
+    // Show the overlay (display: flex so it's centered)
+    overlay.style.display = 'flex';
+    
+    // Trigger the fade-in + staggered child animations on next frame
+    requestAnimationFrame(() => {
+        overlay.classList.add('welcome-visible');
+    });
+    
+    // Click anywhere to dismiss
+    overlay.addEventListener('click', function dismiss() {
+        overlay.removeEventListener('click', dismiss);
+        
+        // Fade out
+        overlay.classList.add('welcome-fadeout');
+        
+        // After fade completes, remove and enable controls
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            overlay.classList.remove('welcome-visible', 'welcome-fadeout');
+            setControlsEnabled(true);
+            console.log('Welcome dismissed - controls enabled');
+        }, 600);
+    });
 }
 
 /**
