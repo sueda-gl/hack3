@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLAWQUEST — 2D Low-Poly Prototype</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; font-family: 'Nunito', sans-serif; background: #3a7a4a; }
+        canvas { position: fixed; inset: 0; display: block; cursor: grab; }
+        canvas:active { cursor: grabbing; }
+
+        /* ── UI layer ─────────────────────────────── */
+        #ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+        #ui > * { pointer-events: auto; }
+
+        .panel {
+            background: rgba(255,252,240,0.92);
+            border: 2px solid #c4a060;
+            border-radius: 10px;
+            box-shadow: 0 3px 12px rgba(50,30,0,0.18);
+        }
+
+        /* ── title ────────────────────────────────── */
+        .title { position: absolute; top: 14px; left: 14px; padding: 10px 16px; }
+        .title h1 { font-size: 22px; font-weight: 800; color: #5b3a1a; letter-spacing: 2px; }
+        .title .sub { font-size: 10px; color: #9c7850; letter-spacing: 1px; margin-top: 1px; }
+
+        /* ── resources ────────────────────────────── */
+        .resources {
+            position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 16px; padding: 7px 20px;
+        }
+        .res { display: flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 700; color: #5b3a1a; }
+        .res .icon { font-size: 16px; }
+
+        /* ── leaderboard ──────────────────────────── */
+        .leaderboard { position: absolute; top: 90px; left: 14px; min-width: 170px; padding: 10px 14px; }
+        .leaderboard h3 {
+            font-size: 10px; font-weight: 700; color: #9c7850;
+            text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px;
+        }
+        .lb-row { display: flex; align-items: center; padding: 3px 0; font-size: 13px; color: #5b3a1a; }
+        .lb-dot { width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+        .lb-name { flex: 1; font-weight: 600; }
+        .lb-count { font-weight: 800; color: #9c7850; }
+
+        /* ── tile info ────────────────────────────── */
+        .tile-info { position: absolute; bottom: 14px; left: 14px; min-width: 200px; padding: 10px 14px; }
+        .tile-info h3 { font-size: 14px; font-weight: 700; color: #5b3a1a; }
+        .tile-info p { font-size: 12px; color: #9c7850; margin-top: 2px; line-height: 1.5; }
+
+        /* ── agent panel ──────────────────────────── */
+        .agent-panel { position: absolute; top: 14px; right: 14px; width: 260px; padding: 12px 14px; }
+        .agent-panel h3 { font-size: 10px; font-weight: 700; color: #9c7850; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
+        .chat-area {
+            background: rgba(240,228,208,0.7); border-radius: 8px;
+            padding: 8px 10px; font-size: 12px; color: #5b3a1a;
+            line-height: 1.6; max-height: 190px; overflow-y: auto;
+        }
+        .chat-area .msg { margin-bottom: 6px; }
+        .chat-area .bold { font-weight: 700; }
+        .chat-area .human { color: #9c7850; }
+        .chat-row { display: flex; gap: 6px; margin-top: 8px; }
+        .chat-row input {
+            flex: 1; border: 2px solid #c4a060; border-radius: 7px;
+            padding: 6px 10px; font-family: 'Nunito'; font-size: 12px;
+            background: #fff8e7; color: #5b3a1a; outline: none;
+        }
+        .chat-row input:focus { border-color: #a07840; }
+        .chat-row button {
+            background: #c45c3c; color: #fff; border: none; border-radius: 7px;
+            padding: 6px 14px; font-family: 'Nunito'; font-weight: 700;
+            font-size: 12px; cursor: pointer;
+        }
+        .chat-row button:hover { background: #a84830; }
+
+        /* ── action bar ───────────────────────────── */
+        .action-bar {
+            position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 8px; padding: 6px 14px;
+        }
+        .action-btn {
+            background: rgba(240,228,208,0.85); border: 2px solid #c4a060;
+            border-radius: 8px; padding: 6px 14px; font-family: 'Nunito';
+            font-size: 12px; font-weight: 700; color: #5b3a1a;
+            cursor: pointer; transition: all .15s;
+        }
+        .action-btn:hover { background: #fff8e7; border-color: #a07840; }
+
+        /* ── zoom controls ────────────────────────── */
+        .zoom-controls {
+            position: absolute; bottom: 14px; right: 14px;
+            display: flex; flex-direction: column; gap: 4px;
+        }
+        .zoom-btn {
+            width: 32px; height: 32px; border-radius: 8px;
+            font-size: 18px; font-weight: 800; line-height: 32px; text-align: center;
+            cursor: pointer;
+        }
+        .zoom-btn:hover { background: #fff8e7; }
+    </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="ui">
+    <div class="panel title">
+        <h1>CLAWQUEST</h1>
+        <div class="sub">2D Low-Poly Prototype</div>
+    </div>
+
+    <div class="panel resources">
+        <div class="res"><span class="icon">🌾</span><span>248</span></div>
+        <div class="res"><span class="icon">⛏️</span><span>156</span></div>
+        <div class="res"><span class="icon">🏠</span><span>7 tiles</span></div>
+    </div>
+
+    <div class="panel leaderboard">
+        <h3>Leaderboard</h3>
+        <div class="lb-row"><div class="lb-dot" style="background:#e05040"></div><span class="lb-name">Su'Claw</span><span class="lb-count">7</span></div>
+        <div class="lb-row"><div class="lb-dot" style="background:#9060c0"></div><span class="lb-name">Hexwitch</span><span class="lb-count">4</span></div>
+        <div class="lb-row"><div class="lb-dot" style="background:#40b868"></div><span class="lb-name">Sol Patch</span><span class="lb-count">3</span></div>
+    </div>
+
+    <div class="panel tile-info" id="tile-info">
+        <h3>🗺️ CLAWQUEST</h3>
+        <p>Tiles: 169 &bull; Claimed: 14</p>
+        <p>Click a tile for details</p>
+    </div>
+
+    <div class="panel agent-panel">
+        <h3>🤖 Agent Terminal</h3>
+        <div class="chat-area">
+            <div class="msg"><span class="bold">Su'Claw:</span> "Expanded south — secured two farmlands. Hexwitch looks quiet."</div>
+            <div class="msg human"><span class="bold">You:</span> "Good. Fortify the border tiles and stockpile food."</div>
+            <div class="msg"><span class="bold">Su'Claw:</span> "On it. I'll fortify the mines first."</div>
+        </div>
+        <div class="chat-row">
+            <input type="text" placeholder="Send a command...">
+            <button>Send</button>
+        </div>
+    </div>
+
+    <div class="panel action-bar">
+        <div class="action-btn">⚔️ Attack</div>
+        <div class="action-btn">🏗️ Expand</div>
+        <div class="action-btn">🛡️ Fortify</div>
+        <div class="action-btn">🤝 Trade</div>
+    </div>
+
+    <div class="zoom-controls">
+        <div class="panel zoom-btn" id="zoom-in">+</div>
+        <div class="panel zoom-btn" id="zoom-out">−</div>
+    </div>
+</div>
+
+<script src="js/lowpoly2d.js"></script>
+</body>
+</html>

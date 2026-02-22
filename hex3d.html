@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLAWQUEST — 3D Hex + Pixel Art</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #06060f; }
+        canvas { display: block; }
+        #loading {
+            position: fixed; inset: 0; background: #06060f;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 100;
+            transition: opacity 0.8s;
+            font-family: system-ui, sans-serif;
+        }
+        #loading.hidden { opacity: 0; pointer-events: none; }
+        #loading h1 { font-size: 32px; color: #7eb8ff; letter-spacing: 4px;
+            text-shadow: 0 0 20px rgba(100,160,255,0.4); }
+        #loading p { margin-top: 8px; font-size: 12px; color: rgba(130,170,230,0.5); letter-spacing: 2px; }
+    </style>
+</head>
+<body>
+<div id="loading">
+    <h1>CLAWQUEST</h1>
+    <p>Loading hex tiles...</p>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── CONFIG ──
+const HEX_SIZE = 1.0;
+const HEX_GAP = 0.03;
+const HEX_THICKNESS = 0.25;
+const GRID_RADIUS = 18;
+const SQRT3 = Math.sqrt(3);
+
+const AGENT_COLORS = [
+    0xe74c3c, 0x9b59b6, 0x2ecc71, 0x3498db, 0xf39c12
+];
+const CAPITALS = [
+    { q: 0, r: 0, str: 5.0 },
+    { q: 10, r: -8, str: 4.0 },
+    { q: -10, r: 8, str: 4.0 },
+    { q: -8, r: -5, str: 3.5 },
+    { q: 9, r: 5, str: 3.5 },
+];
+
+// ── UTILS ──
+function hash(a, b) {
+    const x = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+    return x - Math.floor(x);
+}
+function hexToWorld(q, r) {
+    return { x: HEX_SIZE * 1.5 * q, z: HEX_SIZE * SQRT3 * (r + q / 2) };
+}
+function hexDist(q1, r1, q2, r2) {
+    return (Math.abs(q1 - q2) + Math.abs(q1 + r1 - q2 - r2) + Math.abs(r1 - r2)) / 2;
+}
+
+// ── TERRITORY ──
+const TERRITORY = {};
+function generateTerritory() {
+    for (let q = -GRID_RADIUS; q <= GRID_RADIUS; q++) {
+        const r1 = Math.max(-GRID_RADIUS, -q - GRID_RADIUS);
+        const r2 = Math.min(GRID_RADIUS, -q + GRID_RADIUS);
+        for (let r = r1; r <= r2; r++) {
+            let best = -1, bestScore = -Infinity;
+            CAPITALS.forEach((cap, idx) => {
+                const d = hexDist(q, r, cap.q, cap.r);
+                const noise = (hash(q * 1337 + idx * 99, r * 7919) - 0.5) * 2.5;
+                const score = cap.str + noise - d;
+                if (score > 0 && score > bestScore) { bestScore = score; best = idx; }
+            });
+            if (best >= 0) TERRITORY[`${q},${r}`] = best;
+        }
+    }
+}
+
+// ── SCENE ──
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.8;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a1e);
+scene.fog = new THREE.FogExp2(0x0a0a1e, 0.008);
+
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(16, 20, 24);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.07;
+controls.minDistance = 5;
+controls.maxDistance = 60;
+controls.maxPolarAngle = Math.PI / 2.2;
+controls.minPolarAngle = Math.PI / 8;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.2;
+
+// ── LIGHTING (bright enough to see the texture) ──
+scene.add(new THREE.HemisphereLight(0xaabbdd, 0x445566, 1.0));
+
+const sun = new THREE.DirectionalLight(0xffeedd, 1.8);
+sun.position.set(10, 18, 8);
+sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096);
+const s = 40;
+sun.shadow.camera.left = -s; sun.shadow.camera.right = s;
+sun.shadow.camera.top = s; sun.shadow.camera.bottom = -s;
+sun.shadow.bias = -0.0008;
+scene.add(sun);
+
+scene.add(new THREE.DirectionalLight(0x8899cc, 0.6).translateX(-8).translateY(10).translateZ(-5));
+scene.add(new THREE.AmbientLight(0x667799, 0.5));
+
+// ── SKY (dark space) ──
+const skyGeo = new THREE.SphereGeometry(120, 32, 16);
+const skyColors = [];
+const skyPos = skyGeo.attributes.position;
+for (let i = 0; i < skyPos.count; i++) {
+    const y = (skyPos.getY(i) + 120) / 240;
+    const c = new THREE.Color(0x0a0a1e).lerp(new THREE.Color(0x1a2a4a), Math.pow(y, 0.5));
+    skyColors.push(c.r, c.g, c.b);
+}
+skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(skyColors, 3));
+scene.add(new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+
+// ── STARS ──
+const starGeo = new THREE.BufferGeometry();
+const starVerts = [];
+for (let i = 0; i < 2000; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const r = 100 + Math.random() * 15;
+    starVerts.push(
+        r * Math.sin(phi) * Math.cos(theta),
+        r * Math.sin(phi) * Math.sin(theta),
+        r * Math.cos(phi)
+    );
+}
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
+scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({
+    color: 0x8899bb, size: 0.3, transparent: true, opacity: 0.8
+})));
+
+// ── LOAD TILE TEXTURE ──
+const textureLoader = new THREE.TextureLoader();
+const tileTexture = textureLoader.load('Screenshot 2026-02-15 at 16.27.05.png');
+tileTexture.wrapS = THREE.RepeatWrapping;
+tileTexture.wrapT = THREE.RepeatWrapping;
+tileTexture.magFilter = THREE.NearestFilter;  // crispy pixel art
+tileTexture.minFilter = THREE.NearestFilter;
+
+// ── BUILD HEX TILES ──
+generateTerritory();
+
+const hexGeo = new THREE.CylinderGeometry(HEX_SIZE - HEX_GAP, HEX_SIZE - HEX_GAP, HEX_THICKNESS, 6);
+const hexData = [];
+const borderEdges = [];
+
+const HEX_DIRS = [
+    { dq: 1, dr: 0 },  { dq: 0, dr: 1 },  { dq: -1, dr: 1 },
+    { dq: -1, dr: 0 }, { dq: 0, dr: -1 }, { dq: 1, dr: -1 },
+];
+
+for (let q = -GRID_RADIUS; q <= GRID_RADIUS; q++) {
+    const r1 = Math.max(-GRID_RADIUS, -q - GRID_RADIUS);
+    const r2 = Math.min(GRID_RADIUS, -q + GRID_RADIUS);
+    for (let r = r1; r <= r2; r++) {
+        const pos = hexToWorld(q, r);
+        const owner = TERRITORY[`${q},${r}`];
+        const elev = hash(q * 5381, r * 4217) * 0.04;
+
+        // Create material with tile texture + faction tint
+        const mat = new THREE.MeshLambertMaterial({
+            map: tileTexture,
+            flatShading: true,
+        });
+
+        // Apply faction color as a lighter tint so texture shows through
+        if (owner !== undefined) {
+            const agentColor = new THREE.Color(AGENT_COLORS[owner]);
+            const baseColor = new THREE.Color(0xccccdd);
+            baseColor.lerp(agentColor, 0.25);
+            mat.color = baseColor;
+            mat.emissive = agentColor;
+            mat.emissiveIntensity = 0.12;
+        } else {
+            mat.color = new THREE.Color(0xbbbbcc);
+        }
+
+        const tile = new THREE.Mesh(hexGeo, mat);
+        tile.position.set(pos.x, elev, pos.z);
+        tile.receiveShadow = true;
+        tile.castShadow = true;
+        scene.add(tile);
+
+        const topY = elev + HEX_THICKNESS / 2;
+        hexData.push({ mesh: tile, q, r, owner, topY });
+
+        // Territory borders
+        if (owner !== undefined) {
+            for (let d = 0; d < 6; d++) {
+                const nq = q + HEX_DIRS[d].dq;
+                const nr = r + HEX_DIRS[d].dr;
+                const nOwner = TERRITORY[`${nq},${nr}`];
+                if (nOwner !== owner) {
+                    const a1 = (Math.PI / 3) * d;
+                    const a2 = (Math.PI / 3) * ((d + 1) % 6);
+                    const hexS = HEX_SIZE - HEX_GAP;
+                    const v1 = new THREE.Vector3(
+                        pos.x + hexS * Math.cos(a1), topY + 0.01,
+                        pos.z + hexS * Math.sin(a1)
+                    );
+                    const v2 = new THREE.Vector3(
+                        pos.x + hexS * Math.cos(a2), topY + 0.01,
+                        pos.z + hexS * Math.sin(a2)
+                    );
+                    borderEdges.push({ v1, v2, color: AGENT_COLORS[owner] });
+                }
+            }
+        }
+    }
+}
+
+// ── GLOWING TERRITORY BORDERS ──
+borderEdges.forEach(({ v1, v2, color }) => {
+    const geo = new THREE.BufferGeometry().setFromPoints([v1, v2]);
+    const mat = new THREE.LineBasicMaterial({
+        color, linewidth: 2, transparent: true, opacity: 0.8
+    });
+    scene.add(new THREE.Line(geo, mat));
+
+    // Glow tube for thickness
+    const dir = new THREE.Vector3().subVectors(v2, v1);
+    const len = dir.length();
+    const mid = new THREE.Vector3().addVectors(v1, v2).multiplyScalar(0.5);
+    const tubeGeo = new THREE.CylinderGeometry(0.03, 0.03, len, 4);
+    const tubeMat = new THREE.MeshBasicMaterial({
+        color, transparent: true, opacity: 0.5
+    });
+    const tube = new THREE.Mesh(tubeGeo, tubeMat);
+    tube.position.copy(mid);
+    tube.lookAt(v2);
+    tube.rotateX(Math.PI / 2);
+    scene.add(tube);
+});
+
+// ── GROUND PLANE ──
+const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(150, 150),
+    new THREE.MeshLambertMaterial({ color: 0x040810 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.3;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ── ANIMATE ──
+const clock = new THREE.Clock();
+
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+// ── RESIZE ──
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ── GO ──
+document.getElementById('loading').classList.add('hidden');
+animate();
+</script>
+</body>
+</html>

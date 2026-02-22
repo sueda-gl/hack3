@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOID DRIFTER — Space Exploration</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            overflow: hidden; 
+            font-family: 'Share Tech Mono', monospace; 
+            background: #0a0a12;
+        }
+        
+        #loading {
+            position: fixed;
+            inset: 0;
+            background: #0a0a12;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            color: #7b5cff;
+            font-family: 'Orbitron', sans-serif;
+        }
+        #loading.hidden { display: none; }
+        #loading h1 { font-size: 32px; letter-spacing: 8px; margin-bottom: 20px; }
+        #loading .bar { width: 200px; height: 4px; background: #1a1a2e; border-radius: 2px; overflow: hidden; }
+        #loading .bar-fill { height: 100%; background: linear-gradient(90deg, #7b5cff, #00f0ff); width: 0%; transition: width 0.3s; }
+        
+        canvas { 
+            position: fixed; 
+            inset: 0; 
+            display: block; 
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        #ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+        #ui > * { pointer-events: auto; }
+
+        .panel {
+            background: rgba(10, 10, 18, 0.9);
+            border: 1px solid #7b5cff40;
+            border-radius: 4px;
+            box-shadow: 0 0 20px rgba(123, 92, 255, 0.15), inset 0 0 30px rgba(123, 92, 255, 0.05);
+        }
+
+        .title { 
+            position: absolute; 
+            top: 16px; 
+            left: 16px; 
+            padding: 12px 18px;
+        }
+        .title h1 { 
+            font-family: 'Orbitron', sans-serif;
+            font-size: 20px; 
+            font-weight: 900; 
+            color: #7b5cff; 
+            letter-spacing: 4px;
+            text-shadow: 0 0 10px rgba(123, 92, 255, 0.5);
+        }
+        .title .sub { 
+            font-size: 10px; 
+            color: #5a5a8a; 
+            letter-spacing: 2px;
+            margin-top: 4px;
+        }
+
+        .ship-status {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            padding: 12px 16px;
+            min-width: 180px;
+        }
+        .ship-status h3 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 10px;
+            font-weight: 600;
+            color: #5a5a8a;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+        .status-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 11px;
+            color: #8a8aaa;
+        }
+        .status-bar {
+            width: 80px;
+            height: 6px;
+            background: #1a1a2e;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .status-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+        .status-bar-fill.energy { background: linear-gradient(90deg, #00f0ff, #7b5cff); }
+        .status-bar-fill.hull { background: linear-gradient(90deg, #ff5c5c, #ff9a5c); }
+        .status-bar-fill.fuel { background: linear-gradient(90deg, #5cff7b, #00f0ff); }
+
+        .minimap {
+            position: absolute;
+            bottom: 16px;
+            right: 16px;
+            padding: 8px;
+        }
+        .minimap canvas {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            border: 1px solid #7b5cff30;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            padding: 10px 14px;
+            font-size: 10px;
+            color: #5a5a8a;
+        }
+        .controls span { 
+            display: inline-block;
+            margin-right: 16px; 
+        }
+        .controls kbd {
+            background: #1a1a2e;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #7b5cff;
+            font-family: 'Share Tech Mono', monospace;
+        }
+
+        .coords {
+            position: absolute;
+            bottom: 60px;
+            left: 16px;
+            padding: 8px 12px;
+            font-size: 11px;
+            color: #5a5a8a;
+            font-family: 'Share Tech Mono', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <h1>VOID DRIFTER</h1>
+        <div class="bar"><div class="bar-fill" id="load-bar"></div></div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+    
+    <!-- UI panels hidden for now -->
+    <div id="ui" style="display:none">
+        <div class="panel ship-status">
+            <div class="status-row"><span>ENERGY</span><div class="status-bar"><div class="status-bar-fill energy" id="energy-bar"></div></div></div>
+            <div class="status-row"><span>HULL</span><div class="status-bar"><div class="status-bar-fill hull" id="hull-bar"></div></div></div>
+            <div class="status-row"><span>FUEL</span><div class="status-bar"><div class="status-bar-fill fuel" id="fuel-bar"></div></div></div>
+        </div>
+        <div class="panel minimap"><canvas id="minimap" width="150" height="150"></canvas></div>
+        <div class="panel coords" id="coords"></div>
+    </div>
+
+    <script src="js/space-game.js?v=17"></script>
+</body>
+</html>

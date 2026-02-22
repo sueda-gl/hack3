@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 
 // Import routes
 import agentRoutes from './routes/agent.js';
+import { findStartingTile } from './routes/agent.js';
 import mapRoutes from './routes/map.js';
 import actionRoutes from './routes/actions.js';
 import dashboardRoutes from './routes/dashboard.js';
@@ -145,10 +146,10 @@ app.post('/api/admin/reset', (req, res) => {
     // Re-enable foreign keys
     db.pragma('foreign_keys = ON');
 
-    // Assign one starting tile per agent near center
+    // Assign one starting tile per agent, spread apart using findStartingTile()
     const agents = db.prepare(`SELECT id FROM agents`).all() as { id: string }[];
     for (const agent of agents) {
-      const tile = db.prepare(`SELECT q, r FROM tiles WHERE owner_id IS NULL ORDER BY (q*q + r*r + q*r) ASC LIMIT 1`).get() as { q: number; r: number } | undefined;
+      const tile = findStartingTile();
       if (tile) {
         db.prepare(`UPDATE tiles SET owner_id = ? WHERE q = ? AND r = ?`).run(agent.id, tile.q, tile.r);
         db.prepare(`UPDATE agents SET capital_q = ?, capital_r = ? WHERE id = ?`).run(tile.q, tile.r, agent.id);

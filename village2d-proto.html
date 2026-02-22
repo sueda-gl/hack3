@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLAWQUEST — Pixel Village Prototype</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; font-family: 'Nunito', sans-serif; background: #2a5a1a; }
+        canvas { position: fixed; inset: 0; display: block; cursor: grab; image-rendering: pixelated; }
+        canvas:active { cursor: grabbing; }
+
+        #ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+        #ui > * { pointer-events: auto; }
+
+        .panel {
+            background: rgba(255,252,240,0.93);
+            border: 2px solid #b89860;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(40,20,0,0.2);
+        }
+
+        .title { position: absolute; top: 12px; left: 12px; padding: 8px 14px; }
+        .title h1 { font-size: 18px; font-weight: 800; color: #5b3a1a; letter-spacing: 2px; }
+        .title .sub { font-size: 9px; color: #9c7850; letter-spacing: 1px; }
+
+        .agent-list {
+            position: absolute; top: 70px; left: 12px;
+            padding: 10px 12px; min-width: 180px;
+        }
+        .agent-list h3 {
+            font-size: 9px; font-weight: 700; color: #9c7850;
+            text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px;
+        }
+        .al-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 12px; color: #5b3a1a; }
+        .al-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .al-name { font-weight: 700; flex: 1; }
+        .al-activity { font-size: 10px; color: #9c7850; font-weight: 400; }
+
+        .chat-panel {
+            position: absolute; bottom: 12px; right: 12px;
+            width: 280px; padding: 10px 12px;
+        }
+        .chat-panel h3 {
+            font-size: 9px; font-weight: 700; color: #9c7850;
+            text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px;
+        }
+        .chat-feed {
+            background: rgba(240,228,208,0.6); border-radius: 6px;
+            padding: 8px; font-size: 11px; color: #5b3a1a;
+            line-height: 1.5; max-height: 140px; overflow-y: auto;
+        }
+        .chat-feed .msg { margin-bottom: 5px; }
+        .chat-feed .bold { font-weight: 700; }
+        .chat-feed .you { color: #9c7850; }
+        .chat-row { display: flex; gap: 5px; margin-top: 8px; }
+        .chat-row input {
+            flex: 1; border: 2px solid #b89860; border-radius: 6px;
+            padding: 5px 8px; font-family: 'Nunito'; font-size: 11px;
+            background: #fff8e7; color: #5b3a1a; outline: none;
+        }
+        .chat-row button {
+            background: #c45c3c; color: #fff; border: none; border-radius: 6px;
+            padding: 5px 12px; font-family: 'Nunito'; font-weight: 700; font-size: 11px; cursor: pointer;
+        }
+
+        .legend {
+            position: absolute; bottom: 12px; left: 12px;
+            padding: 8px 12px; font-size: 10px; color: #9c7850;
+        }
+        .legend span { margin-right: 10px; }
+    </style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="ui">
+    <div class="panel title"><h1>CLAWQUEST</h1><div class="sub">Pixel Village Prototype</div></div>
+
+    <div class="panel agent-list" id="agent-list">
+        <h3>Agents</h3>
+    </div>
+
+    <div class="panel chat-panel">
+        <h3>Agent Comms</h3>
+        <div class="chat-feed">
+            <div class="msg"><span class="bold">Su'Claw:</span> "Just finished patrolling the east road. All clear."</div>
+            <div class="msg you"><span class="bold">You:</span> "Good. Head to the market and check on supplies."</div>
+            <div class="msg"><span class="bold">Su'Claw:</span> "On my way."</div>
+        </div>
+        <div class="chat-row">
+            <input type="text" placeholder="Send a command...">
+            <button>Send</button>
+        </div>
+    </div>
+
+    <div class="panel legend">
+        <span>Scroll: Pan</span>
+        <span>Wheel: Zoom</span>
+    </div>
+</div>
+<script src="js/village2d.js"></script>
+</body>
+</html>

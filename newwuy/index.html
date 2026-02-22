@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hex Map Editor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 12px;
+            background: #0f0f23;
+            border-bottom: 1px solid #222;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+        .tg {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .tg.sep { border-left: 1px solid #333; padding-left: 10px; }
+        .tbtn {
+            padding: 5px 10px;
+            background: #1a1a2e;
+            border: 1px solid #333;
+            color: #888;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 11px;
+            transition: all 0.12s;
+            white-space: nowrap;
+        }
+        .tbtn:hover { border-color: #666; color: #ccc; }
+        .tbtn.active { background: #00ffcc; color: #000; border-color: #00ffcc; font-weight: bold; }
+        .tbtn.danger { color: #ff0066; }
+        .tbtn.danger:hover { background: #ff0066; color: #fff; border-color: #ff0066; }
+        .tbtn.primary { color: #00ffcc; }
+        .tbtn.primary:hover { background: #00ffcc; color: #000; border-color: #00ffcc; }
+        .toolbar label { color: #555; font-size: 10px; white-space: nowrap; }
+        .toolbar input[type="number"] {
+            width: 44px; padding: 4px; background: #111; border: 1px solid #333;
+            color: #fff; font-family: inherit; font-size: 11px; text-align: center;
+        }
+        .toolbar input[type="number"]:focus { outline: none; border-color: #00ffcc; }
+        .toolbar .x { color: #444; font-size: 10px; }
+        .sk { background: #222; color: #444; padding: 1px 4px; font-size: 8px; border-radius: 2px; margin-left: 2px; }
+
+        .slider-group { display: flex; align-items: center; gap: 4px; }
+        .slider-group input[type="range"] {
+            width: 80px; height: 4px; accent-color: #00ffcc;
+            background: #333; border-radius: 2px; cursor: pointer;
+        }
+        .slider-val {
+            color: #00ffcc; font-size: 11px; min-width: 32px; text-align: right;
+        }
+
+        .editor { display: flex; flex: 1; overflow: hidden; }
+
+        .palette {
+            width: 190px; flex-shrink: 0; background: #0f0f23;
+            border-right: 1px solid #222; display: flex;
+            flex-direction: column; overflow: hidden;
+        }
+        .palette-head {
+            padding: 8px 10px; border-bottom: 1px solid #222;
+        }
+        .palette-head h3 {
+            color: #00ffcc; font-size: 10px; text-transform: uppercase;
+            letter-spacing: 1px; margin-bottom: 6px;
+        }
+        .pal-search {
+            width: 100%; padding: 5px 7px; background: #111; border: 1px solid #333;
+            color: #fff; font-family: inherit; font-size: 11px;
+        }
+        .pal-search:focus { outline: none; border-color: #00ffcc; }
+        .pal-search::placeholder { color: #444; }
+        .pal-filters {
+            display: flex; flex-wrap: wrap; gap: 3px; padding: 6px 10px;
+            border-bottom: 1px solid #222;
+        }
+        .fpill {
+            padding: 2px 7px; background: none; border: 1px solid #333;
+            color: #555; cursor: pointer; font-family: inherit; font-size: 9px;
+        }
+        .fpill:hover { border-color: #555; color: #aaa; }
+        .fpill.active { background: #00ffcc; color: #000; border-color: #00ffcc; font-weight: bold; }
+        .pal-tiles {
+            flex: 1; overflow-y: auto; padding: 6px;
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: 5px; align-content: start;
+        }
+        .ptile {
+            aspect-ratio: 1; background: #111; border: 2px solid #222;
+            cursor: pointer; overflow: hidden; display: flex;
+            align-items: center; justify-content: center;
+            transition: border-color 0.1s; position: relative;
+        }
+        .ptile:hover { border-color: #555; }
+        .ptile.selected { border-color: #00ffcc; box-shadow: 0 0 8px rgba(0,255,204,0.3); }
+        .ptile img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+        .ptile .plbl {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            background: rgba(0,0,0,0.85); color: #777; font-size: 7px;
+            padding: 2px; text-align: center; white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis;
+        }
+        .sel-ind {
+            padding: 7px 10px; border-top: 1px solid #222;
+            font-size: 10px; color: #555; flex-shrink: 0;
+        }
+        .sel-ind strong { color: #00ffcc; }
+
+        .map-vp {
+            flex: 1; overflow: auto; position: relative; background: #111;
+            background-image:
+                linear-gradient(45deg, #0a0a1a 25%, transparent 25%),
+                linear-gradient(-45deg, #0a0a1a 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #0a0a1a 75%),
+                linear-gradient(-45deg, transparent 75%, #0a0a1a 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+        }
+        .map-grid {
+            position: relative;
+            margin: 40px;
+        }
+        .mcell {
+            position: absolute;
+            cursor: crosshair;
+            transition: none;
+        }
+        .mcell.show-grid {
+            outline: 1px solid rgba(255,255,255,0.06);
+        }
+        .mcell:hover {
+            outline: 2px solid rgba(0,255,204,0.5) !important;
+            z-index: 2;
+        }
+        .mcell.erase-hover:hover {
+            outline-color: rgba(255,0,102,0.6) !important;
+        }
+        .mcell img.placed {
+            width: 100%; height: 100%; object-fit: contain;
+            image-rendering: pixelated; display: block; pointer-events: none;
+        }
+        .mcell .ghost {
+            position: absolute; inset: 0; opacity: 0.35; pointer-events: none; z-index: 1;
+        }
+        .mcell .ghost img {
+            width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated;
+        }
+
+        .modal-ov {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.7); z-index: 100;
+            align-items: center; justify-content: center;
+        }
+        .modal-ov.open { display: flex; }
+        .modal {
+            background: #0f0f23; border: 1px solid #333; padding: 20px;
+            width: 620px; max-height: 80vh; display: flex; flex-direction: column;
+        }
+        .modal h2 {
+            color: #00ffcc; font-size: 13px; text-transform: uppercase;
+            letter-spacing: 1px; margin-bottom: 10px;
+        }
+        .modal textarea {
+            flex: 1; min-height: 300px; background: #000; border: 1px solid #333;
+            color: #0f0; font-family: 'Courier New', monospace; font-size: 11px;
+            padding: 10px; resize: vertical;
+        }
+        .modal-btns { display: flex; gap: 8px; margin-top: 10px; }
+        .modal-btns button {
+            flex: 1; padding: 8px; border: none; cursor: pointer;
+            font-family: inherit; font-size: 12px;
+        }
+        .mcopy { background: #00ffcc; color: #000; font-weight: bold; }
+        .mcopy:hover { background: #00ddaa; }
+        .mclose { background: #333; color: #fff; }
+        .mclose:hover { background: #444; }
+
+        .statusbar {
+            padding: 4px 12px; background: #0a0a1a; border-top: 1px solid #222;
+            font-size: 10px; color: #555; display: flex; gap: 16px; flex-shrink: 0;
+        }
+        .statusbar strong { color: #777; }
+    </style>
+</head>
+<body>
+
+<div class="toolbar">
+    <div class="tg">
+        <button class="tbtn active" id="tool-paint" onclick="setTool('paint')">Paint<span class="sk">B</span></button>
+        <button class="tbtn" id="tool-erase" onclick="setTool('erase')">Erase<span class="sk">E</span></button>
+        <button class="tbtn" id="tool-fill" onclick="setTool('fill')">Fill<span class="sk">F</span></button>
+        <button class="tbtn" id="tool-pick" onclick="setTool('pick')">Pick<span class="sk">I</span></button>
+    </div>
+    <div class="tg sep">
+        <label>Map</label>
+        <input type="number" id="map-cols" value="12" min="1" max="80">
+        <span class="x">&times;</span>
+        <input type="number" id="map-rows" value="10" min="1" max="80">
+        <button class="tbtn" onclick="resizeMap()">Apply</button>
+    </div>
+    <div class="tg sep">
+        <label>Size</label>
+        <button class="tbtn" onclick="setCellSize(48)">48</button>
+        <button class="tbtn active" id="z64" onclick="setCellSize(64)">64</button>
+        <button class="tbtn" onclick="setCellSize(96)">96</button>
+        <button class="tbtn" onclick="setCellSize(128)">128</button>
+    </div>
+    <div class="tg sep">
+        <label>X gap</label>
+        <div class="slider-group">
+            <input type="range" id="x-gap" min="-50" max="50" value="0" oninput="setXGap(+this.value)">
+            <span class="slider-val" id="x-gap-val">0px</span>
+        </div>
+    </div>
+    <div class="tg sep">
+        <label>Y gap</label>
+        <div class="slider-group">
+            <input type="range" id="y-gap" min="-50" max="50" value="-16" oninput="setYGap(+this.value)">
+            <span class="slider-val" id="y-gap-val">-16px</span>
+        </div>
+    </div>
+    <div class="tg sep">
+        <button class="tbtn" id="btn-grid" onclick="toggleGrid()">Grid ON</button>
+    </div>
+    <div class="tg sep">
+        <button class="tbtn danger" onclick="clearMap()">Clear</button>
+        <button class="tbtn primary" onclick="openExport()">Export</button>
+    </div>
+</div>
+
+<div class="editor">
+    <div class="palette">
+        <div class="palette-head">
+            <h3>Tiles</h3>
+            <input type="text" class="pal-search" id="pal-search" placeholder="Search...">
+        </div>
+        <div class="pal-filters" id="pal-filters"></div>
+        <div class="pal-tiles" id="pal-tiles"></div>
+        <div class="sel-ind" id="sel-ind">No tile selected</div>
+    </div>
+    <div class="map-vp" id="map-vp">
+        <div class="map-grid" id="map-grid"></div>
+    </div>
+</div>
+
+<div class="statusbar">
+    <span>Cell: <strong id="st-pos">-</strong></span>
+    <span>Tool: <strong id="st-tool">Paint</strong></span>
+    <span>Tile: <strong id="st-tile">None</strong></span>
+    <span>Placed: <strong id="st-filled">0</strong></span>
+</div>
+
+<div class="modal-ov" id="export-modal">
+    <div class="modal">
+        <h2>Export Map JSON</h2>
+        <textarea id="export-json" readonly></textarea>
+        <div class="modal-btns">
+            <button class="mcopy" onclick="copyExport()">Copy JSON</button>
+            <button class="mclose" onclick="closeExport()">Close</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const TILES = [
+    { file: 'tile_0_0.png', cat: 'grid' }, { file: 'tile_0_1.png', cat: 'grid' },
+    { file: 'tile_0_2.png', cat: 'grid' }, { file: 'tile_0_3.png', cat: 'grid' },
+    { file: 'tile_0_4.png', cat: 'grid' }, { file: 'tile_0_5.png', cat: 'grid' },
+    { file: 'tile_0_6.png', cat: 'grid' }, { file: 'tile_1_0.png', cat: 'grid' },
+    { file: 'tile_1_1.png', cat: 'grid' }, { file: 'tile_1_2.png', cat: 'grid' },
+    { file: 'tile_1_3.png', cat: 'grid' }, { file: 'tile_1_4.png', cat: 'grid' },
+    { file: 'tile_1_5.png', cat: 'grid' }, { file: 'tile_1_6.png', cat: 'grid' },
+    { file: 'tile_2_0.png', cat: 'grid' }, { file: 'tile_2_1.png', cat: 'grid' },
+    { file: 'tile_2_2.png', cat: 'grid' }, { file: 'tile_2_3.png', cat: 'grid' },
+    { file: 'tile_2_4.png', cat: 'grid' }, { file: 'tile_2_5.png', cat: 'grid' },
+    { file: 'tile_2_6.png', cat: 'grid' }, { file: 'tile_3_0.png', cat: 'grid' },
+    { file: 'tile_3_1.png', cat: 'grid' }, { file: 'tile_3_2.png', cat: 'grid' },
+    { file: 'tile_3_3.png', cat: 'grid' }, { file: 'tile_3_4.png', cat: 'grid' },
+    { file: 'tile_3_5.png', cat: 'grid' }, { file: 'tile_3_6.png', cat: 'grid' },
+    { file: 'tile_4_0.png', cat: 'grid' }, { file: 'tile_4_1.png', cat: 'grid' },
+    { file: 'tile_4_2.png', cat: 'grid' }, { file: 'tile_4_3.png', cat: 'grid' },
+    { file: 'tile_4_4.png', cat: 'grid' }, { file: 'tile_4_5.png', cat: 'grid' },
+    { file: 'tile_4_6.png', cat: 'grid' }, { file: 'tile_5_0.png', cat: 'grid' },
+    { file: 'tile_5_1.png', cat: 'grid' }, { file: 'tile_5_2.png', cat: 'grid' },
+    { file: 'tile_5_3.png', cat: 'grid' }, { file: 'tile_5_4.png', cat: 'grid' },
+    { file: 'tile_5_5.png', cat: 'grid' }, { file: 'tile_5_6.png', cat: 'grid' },
+    { file: 'tile_6_0.png', cat: 'grid' }, { file: 'tile_6_1.png', cat: 'grid' },
+    { file: 'tile_6_2.png', cat: 'grid' }, { file: 'tile_6_3.png', cat: 'grid' },
+    { file: 'tile_6_4.png', cat: 'grid' }, { file: 'tile_6_5.png', cat: 'grid' },
+    { file: 'tile_6_6.png', cat: 'grid' },
+    { file: 'tile_r0_c0.png', cat: 'sprite' }, { file: 'tile_r0_c1.png', cat: 'sprite' },
+    { file: 'tile_r0_c2.png', cat: 'sprite' }, { file: 'tile_r0_c3.png', cat: 'sprite' },
+    { file: 'tile_r0_c4.png', cat: 'sprite' }, { file: 'tile_r0_c5.png', cat: 'sprite' },
+    { file: 'tile_r0_c6.png', cat: 'sprite' }, { file: 'tile_r1_c0.png', cat: 'sprite' },
+    { file: 'tile_r1_c1.png', cat: 'sprite' }, { file: 'tile_r1_c2.png', cat: 'sprite' },
+    { file: 'tile_r1_c3.png', cat: 'sprite' }, { file: 'tile_r1_c4.png', cat: 'sprite' },
+    { file: 'tile_r1_c5.png', cat: 'sprite' }, { file: 'tile_r1_c6.png', cat: 'sprite' },
+    { file: 'tile_r2_c0.png', cat: 'sprite' }, { file: 'tile_r2_c1.png', cat: 'sprite' },
+    { file: 'tile_r2_c2.png', cat: 'sprite' }, { file: 'tile_r2_c3.png', cat: 'sprite' },
+    { file: 'tile_r2_c4.png', cat: 'sprite' }, { file: 'tile_r2_c5.png', cat: 'sprite' },
+    { file: 'tile_r2_c6.png', cat: 'sprite' }, { file: 'tile_r3_c0.png', cat: 'sprite' },
+    { file: 'tile_r3_c1.png', cat: 'sprite' }, { file: 'tile_r3_c2.png', cat: 'sprite' },
+    { file: 'tile_r3_c3.png', cat: 'sprite' }, { file: 'tile_r3_c4.png', cat: 'sprite' },
+    { file: 'tile_r3_c5.png', cat: 'sprite' }, { file: 'tile_r3_c6.png', cat: 'sprite' },
+    { file: 'tile_r4_c0.png', cat: 'sprite' }, { file: 'tile_r4_c1.png', cat: 'sprite' },
+    { file: 'tile_r4_c2.png', cat: 'sprite' }, { file: 'tile_r4_c3.png', cat: 'sprite' },
+    { file: 'tile_r4_c4.png', cat: 'sprite' }, { file: 'tile_r4_c5.png', cat: 'sprite' },
+    { file: 'tile_r4_c6.png', cat: 'sprite' }, { file: 'tile_r5_c0.png', cat: 'sprite' },
+    { file: 'tile_r5_c1.png', cat: 'sprite' }, { file: 'tile_r5_c2.png', cat: 'sprite' },
+    { file: 'tile_r5_c3.png', cat: 'sprite' }, { file: 'tile_r5_c4.png', cat: 'sprite' },
+    { file: 'tile_r5_c5.png', cat: 'sprite' }, { file: 'tile_r5_c6.png', cat: 'sprite' },
+    { file: 'tile_r6_c0.png', cat: 'sprite' }, { file: 'tile_r6_c1.png', cat: 'sprite' },
+    { file: 'tile_r6_c2.png', cat: 'sprite' }, { file: 'tile_r6_c3.png', cat: 'sprite' },
+    { file: 'tile_r6_c4.png', cat: 'sprite' }, { file: 'tile_r6_c5.png', cat: 'sprite' },
+    { file: 'tile_r6_c6.png', cat: 'sprite' },
+    { file: 'hex_tile_1.png', cat: 'hex' }, { file: 'hex_tile_2.png', cat: 'hex' },
+    { file: 'hex_cracked.png', cat: 'hex' },
+    { file: 'hex_nature_1.png', cat: 'hex' }, { file: 'hex_nature_2.png', cat: 'hex' },
+    { file: 'hex_nature_3.png', cat: 'hex' }, { file: 'hex_nature_4.png', cat: 'hex' },
+    { file: 'snow_tile_1.png', cat: 'snow' }, { file: 'snow_tile_2.png', cat: 'snow' },
+    { file: 'pod_engine.png', cat: 'pod' }, { file: 'pod_kitchen.png', cat: 'pod' },
+    { file: 'char_walk_left.gif', cat: 'character' },
+];
+const CATS = ['all','grid','sprite','hex','snow','pod','character'];
+
+const S = {
+    cols: 12, rows: 10,
+    cellSize: 64,
+    xGap: 0, yGap: -16,
+    tool: 'paint',
+    selectedTile: null,
+    showGrid: true,
+    painting: false,
+    mapData: [],
+    history: [],
+    filter: 'all',
+};
+
+function initMap() {
+    S.mapData = [];
+    for (let r = 0; r < S.rows; r++) {
+        S.mapData[r] = [];
+        for (let c = 0; c < S.cols; c++) S.mapData[r][c] = null;
+    }
+}
+
+function save() {
+    S.history.push(JSON.parse(JSON.stringify(S.mapData)));
+    if (S.history.length > 50) S.history.shift();
+}
+
+function undo() {
+    if (!S.history.length) return;
+    S.mapData = S.history.pop();
+    S.rows = S.mapData.length;
+    S.cols = S.mapData[0]?.length || 1;
+    document.getElementById('map-rows').value = S.rows;
+    document.getElementById('map-cols').value = S.cols;
+    renderMap();
+    updateStatus();
+}
+
+function hexPos(r, c) {
+    const xStep = S.cellSize + S.xGap;
+    const yStep = S.cellSize + S.yGap;
+    const offset = (r % 2 === 1) ? xStep / 2 : 0;
+    return { x: c * xStep + offset, y: r * yStep };
+}
+
+function hexNeighbors(r, c) {
+    const odd = r % 2 === 1;
+    if (odd) {
+        return [[r-1,c],[r-1,c+1],[r,c-1],[r,c+1],[r+1,c],[r+1,c+1]];
+    }
+    return [[r-1,c-1],[r-1,c],[r,c-1],[r,c+1],[r+1,c-1],[r+1,c]];
+}
+
+function renderPalette() {
+    const q = document.getElementById('pal-search').value.toLowerCase();
+    const list = TILES.filter(t =>
+        (S.filter === 'all' || t.cat === S.filter) &&
+        (!q || t.file.toLowerCase().includes(q))
+    );
+    const el = document.getElementById('pal-tiles');
+    el.innerHTML = list.map(t => {
+        const sel = S.selectedTile === t.file ? 'selected' : '';
+        const n = t.file.replace(/\.(png|gif)$/, '');
+        return `<div class="ptile ${sel}" data-f="${t.file}" title="${n}">
+            <img src="tiles/${t.file}" loading="lazy"><span class="plbl">${n}</span></div>`;
+    }).join('');
+    el.querySelectorAll('.ptile').forEach(d => {
+        d.addEventListener('click', () => {
+            S.selectedTile = d.dataset.f;
+            renderPalette();
+            updateSelInd();
+            updateStatus();
+        });
+    });
+}
+
+function renderFilters() {
+    const el = document.getElementById('pal-filters');
+    el.innerHTML = CATS.map(c =>
+        `<button class="fpill ${S.filter===c?'active':''}" data-c="${c}">${c}</button>`
+    ).join('');
+    el.querySelectorAll('.fpill').forEach(b => {
+        b.addEventListener('click', () => { S.filter = b.dataset.c; renderFilters(); renderPalette(); });
+    });
+}
+
+function updateSelInd() {
+    const el = document.getElementById('sel-ind');
+    el.innerHTML = S.selectedTile
+        ? `Selected: <strong>${S.selectedTile.replace(/\.(png|gif)$/,'')}</strong>`
+        : 'No tile selected';
+}
+
+function renderMap() {
+    const grid = document.getElementById('map-grid');
+    grid.innerHTML = '';
+
+    let maxX = 0, maxY = 0;
+    for (let r = 0; r < S.rows; r++) {
+        for (let c = 0; c < S.cols; c++) {
+            const pos = hexPos(r, c);
+            const right = pos.x + S.cellSize;
+            const bottom = pos.y + S.cellSize;
+            if (right > maxX) maxX = right;
+            if (bottom > maxY) maxY = bottom;
+        }
+    }
+    grid.style.width = maxX + 'px';
+    grid.style.height = maxY + 'px';
+
+    for (let r = 0; r < S.rows; r++) {
+        for (let c = 0; c < S.cols; c++) {
+            const pos = hexPos(r, c);
+            const cell = document.createElement('div');
+            cell.className = 'mcell' + (S.showGrid ? ' show-grid' : '');
+            cell.style.left = pos.x + 'px';
+            cell.style.top = pos.y + 'px';
+            cell.style.width = S.cellSize + 'px';
+            cell.style.height = S.cellSize + 'px';
+            cell.dataset.r = r;
+            cell.dataset.c = c;
+
+            const tile = S.mapData[r]?.[c];
+            if (tile) {
+                const img = document.createElement('img');
+                img.className = 'placed';
+                img.src = 'tiles/' + tile;
+                img.draggable = false;
+                cell.appendChild(img);
+            }
+
+            cell.addEventListener('mouseenter', onEnter);
+            cell.addEventListener('mouseleave', onLeave);
+            cell.addEventListener('mousedown', onDown);
+            cell.addEventListener('contextmenu', e => e.preventDefault());
+            grid.appendChild(cell);
+        }
+    }
+}
+
+function onEnter(e) {
+    const cell = e.currentTarget;
+    const r = +cell.dataset.r, c = +cell.dataset.c;
+    document.getElementById('st-pos').textContent = `${c}, ${r}`;
+
+    if (S.tool === 'erase') {
+        cell.classList.add('erase-hover');
+    } else if (S.selectedTile && (S.tool === 'paint' || S.tool === 'fill')) {
+        if (!cell.querySelector('.ghost')) {
+            const g = document.createElement('div');
+            g.className = 'ghost';
+            g.innerHTML = `<img src="tiles/${S.selectedTile}" draggable="false">`;
+            cell.appendChild(g);
+        }
+    }
+    if (S.painting) applyTool(r, c, e.buttons === 2);
+}
+
+function onLeave(e) {
+    const cell = e.currentTarget;
+    cell.classList.remove('erase-hover');
+    const g = cell.querySelector('.ghost');
+    if (g) g.remove();
+}
+
+function onDown(e) {
+    e.preventDefault();
+    const r = +e.currentTarget.dataset.r, c = +e.currentTarget.dataset.c;
+    const right = e.button === 2;
+
+    if (S.tool === 'pick') {
+        const t = S.mapData[r]?.[c];
+        if (t) { S.selectedTile = t; renderPalette(); updateSelInd(); updateStatus(); }
+        return;
+    }
+    if (S.tool === 'fill') {
+        save();
+        hexFloodFill(r, c, right ? null : S.selectedTile);
+        renderMap();
+        updateStatus();
+        return;
+    }
+    save();
+    S.painting = true;
+    applyTool(r, c, right);
+}
+
+function applyTool(r, c, right) {
+    if (right || S.tool === 'erase') {
+        if (S.mapData[r][c] !== null) { S.mapData[r][c] = null; updateCell(r, c); }
+    } else if (S.tool === 'paint' && S.selectedTile) {
+        if (S.mapData[r][c] !== S.selectedTile) { S.mapData[r][c] = S.selectedTile; updateCell(r, c); }
+    }
+    updateStatus();
+}
+
+function updateCell(r, c) {
+    const idx = r * S.cols + c;
+    const cell = document.getElementById('map-grid').children[idx];
+    if (!cell) return;
+    const old = cell.querySelector('img.placed');
+    const tile = S.mapData[r][c];
+    if (tile) {
+        if (old) { old.src = 'tiles/' + tile; }
+        else {
+            const img = document.createElement('img');
+            img.className = 'placed';
+            img.src = 'tiles/' + tile;
+            img.draggable = false;
+            cell.insertBefore(img, cell.firstChild);
+        }
+    } else { if (old) old.remove(); }
+}
+
+function hexFloodFill(startR, startC, newTile) {
+    const target = S.mapData[startR]?.[startC];
+    if (target === newTile) return;
+    const stack = [[startR, startC]];
+    const visited = new Set();
+    while (stack.length) {
+        const [r, c] = stack.pop();
+        const k = r + ',' + c;
+        if (visited.has(k)) continue;
+        if (r < 0 || r >= S.rows || c < 0 || c >= S.cols) continue;
+        if (S.mapData[r][c] !== target) continue;
+        visited.add(k);
+        S.mapData[r][c] = newTile;
+        for (const [nr, nc] of hexNeighbors(r, c)) stack.push([nr, nc]);
+    }
+}
+
+document.addEventListener('mouseup', () => { S.painting = false; });
+
+window.setTool = function(t) {
+    S.tool = t;
+    document.querySelectorAll('[id^="tool-"]').forEach(b => b.classList.remove('active'));
+    document.getElementById('tool-' + t).classList.add('active');
+    document.getElementById('st-tool').textContent = t[0].toUpperCase() + t.slice(1);
+};
+
+window.setCellSize = function(sz) {
+    S.cellSize = sz;
+    document.querySelectorAll('.tg .tbtn').forEach(b => {
+        if (['48','64','96','128'].includes(b.textContent.trim()))
+            b.classList.toggle('active', b.textContent.trim() == String(sz));
+    });
+    renderMap();
+};
+
+window.setXGap = function(v) {
+    S.xGap = v;
+    document.getElementById('x-gap-val').textContent = v + 'px';
+    renderMap();
+};
+window.setYGap = function(v) {
+    S.yGap = v;
+    document.getElementById('y-gap-val').textContent = v + 'px';
+    renderMap();
+};
+
+window.toggleGrid = function() {
+    S.showGrid = !S.showGrid;
+    document.getElementById('btn-grid').textContent = 'Grid ' + (S.showGrid ? 'ON' : 'OFF');
+    document.querySelectorAll('.mcell').forEach(c => c.classList.toggle('show-grid', S.showGrid));
+};
+
+window.resizeMap = function() {
+    const nc = Math.max(1, Math.min(80, +document.getElementById('map-cols').value));
+    const nr = Math.max(1, Math.min(80, +document.getElementById('map-rows').value));
+    save();
+    const nd = [];
+    for (let r = 0; r < nr; r++) {
+        nd[r] = [];
+        for (let c = 0; c < nc; c++) nd[r][c] = S.mapData[r]?.[c] || null;
+    }
+    S.mapData = nd; S.rows = nr; S.cols = nc;
+    renderMap(); updateStatus();
+};
+
+window.clearMap = function() {
+    if (!confirm('Clear entire map?')) return;
+    save(); initMap(); renderMap(); updateStatus();
+};
+
+window.openExport = function() {
+    const out = {
+        type: 'hex-map',
+        width: S.cols,
+        height: S.rows,
+        cellSize: S.cellSize,
+        xGap: S.xGap,
+        yGap: S.yGap,
+        tilePath: 'tiles/',
+        grid: S.mapData
+    };
+    document.getElementById('export-json').value = JSON.stringify(out, null, 2);
+    document.getElementById('export-modal').classList.add('open');
+};
+window.closeExport = function() { document.getElementById('export-modal').classList.remove('open'); };
+window.copyExport = function() {
+    const ta = document.getElementById('export-json');
+    ta.select(); document.execCommand('copy');
+    const b = document.querySelector('.mcopy');
+    b.textContent = 'Copied!'; setTimeout(() => b.textContent = 'Copy JSON', 2000);
+};
+
+function updateStatus() {
+    document.getElementById('st-tile').textContent = S.selectedTile
+        ? S.selectedTile.replace(/\.(png|gif)$/, '') : 'None';
+    let n = 0;
+    for (let r = 0; r < S.rows; r++)
+        for (let c = 0; c < S.cols; c++) if (S.mapData[r][c]) n++;
+    document.getElementById('st-filled').textContent = n + ' / ' + (S.rows * S.cols);
+}
+
+document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    switch (e.key.toLowerCase()) {
+        case 'b': setTool('paint'); break;
+        case 'e': setTool('erase'); break;
+        case 'f': setTool('fill'); break;
+        case 'i': setTool('pick'); break;
+        case 'z': if (e.ctrlKey || e.metaKey) { e.preventDefault(); undo(); } break;
+    }
+});
+
+document.getElementById('pal-search').addEventListener('input', renderPalette);
+document.getElementById('map-grid').addEventListener('dragstart', e => e.preventDefault());
+
+initMap(); renderFilters(); renderPalette(); renderMap(); updateStatus();
+</script>
+</body>
+</html>

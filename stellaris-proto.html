@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLAWQUEST — Stellaris Prototype</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; font-family: 'Exo 2', sans-serif; background: #040810; color: #b0c4d8; }
+
+        #canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; }
+
+        /* ── shared panel ──────────────────────────── */
+        #ui { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+        #ui > * { pointer-events: auto; }
+
+        .panel {
+            background: rgba(8, 14, 28, 0.88);
+            border: 1px solid rgba(70, 130, 210, 0.22);
+            border-radius: 3px;
+            backdrop-filter: blur(6px);
+        }
+
+        /* ── top bar ───────────────────────────────── */
+        .top-bar {
+            position: absolute; top: 0; left: 0; right: 0;
+            display: flex; align-items: center;
+            padding: 8px 18px; gap: 28px;
+            border-bottom: 1px solid rgba(70,130,210,0.18);
+            background: linear-gradient(180deg, rgba(10,18,35,0.95) 0%, rgba(8,14,28,0.88) 100%);
+        }
+        .top-bar .empire-name {
+            font-size: 15px; font-weight: 700; letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #e74c3c;
+            text-shadow: 0 0 8px rgba(231,76,60,0.3);
+        }
+        .top-bar .divider { width: 1px; height: 22px; background: rgba(70,130,210,0.2); }
+        .resource-group { display: flex; gap: 18px; }
+        .res {
+            display: flex; align-items: center; gap: 5px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 13px;
+        }
+        .res .icon { font-size: 14px; opacity: 0.7; }
+        .res .val { color: #e8d44d; font-weight: 600; }
+        .res .label { color: #607890; font-size: 11px; }
+        .top-bar .tick-info {
+            margin-left: auto;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 12px; color: #607890;
+        }
+        .tick-info .tick-num { color: #88aacc; }
+
+        /* ── left sidebar ──────────────────────────── */
+        .sidebar-left {
+            position: absolute; top: 52px; left: 12px;
+            width: 200px; padding: 12px 14px;
+        }
+        .sidebar-left h3 {
+            font-size: 10px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 2px;
+            color: #4a7aaa; margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(70,130,210,0.15);
+        }
+        .empire-row {
+            display: flex; align-items: center; gap: 8px;
+            padding: 4px 0; font-size: 13px;
+        }
+        .empire-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            box-shadow: 0 0 6px currentColor;
+        }
+        .empire-row .name { flex: 1; font-weight: 500; }
+        .empire-row .count {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 12px; color: #607890;
+        }
+        .sidebar-left .stat-row {
+            display: flex; justify-content: space-between;
+            padding: 3px 0; font-size: 12px; color: #506878;
+        }
+        .stat-row .stat-val {
+            font-family: 'Share Tech Mono', monospace;
+            color: #88aacc;
+        }
+
+        /* ── system detail (bottom-left) ───────────── */
+        .system-detail {
+            position: absolute; bottom: 16px; left: 12px;
+            width: 240px; padding: 12px 14px;
+        }
+        .system-detail .sys-name {
+            font-size: 16px; font-weight: 700;
+            color: #c8dae8; letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+        .system-detail .sys-row {
+            display: flex; justify-content: space-between;
+            padding: 2px 0; font-size: 12px;
+        }
+        .sys-row .sys-label { color: #506878; }
+        .sys-row .sys-val {
+            font-family: 'Share Tech Mono', monospace;
+            color: #88aacc;
+        }
+        .sys-val.owned { color: #e8d44d; }
+
+        /* ── agent panel (right) ───────────────────── */
+        .agent-panel {
+            position: absolute; top: 52px; right: 12px;
+            width: 260px; padding: 14px;
+        }
+        .agent-panel h3 {
+            font-size: 10px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 2px;
+            color: #4a7aaa; margin-bottom: 10px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(70,130,210,0.15);
+        }
+        .chat-feed {
+            max-height: 200px; overflow-y: auto;
+            font-size: 12px; line-height: 1.6;
+            margin-bottom: 10px;
+        }
+        .chat-feed .msg { margin-bottom: 8px; }
+        .chat-feed .agent-label { font-weight: 600; color: #e74c3c; }
+        .chat-feed .human-label { font-weight: 600; color: #4a9acc; }
+        .chat-input-row { display: flex; gap: 6px; }
+        .chat-input-row input {
+            flex: 1; background: rgba(20,30,50,0.7);
+            border: 1px solid rgba(70,130,210,0.25);
+            border-radius: 3px; padding: 6px 10px;
+            font-family: 'Exo 2', sans-serif; font-size: 12px;
+            color: #b0c4d8; outline: none;
+            transition: border-color .2s;
+        }
+        .chat-input-row input:focus { border-color: rgba(70,130,210,0.5); }
+        .chat-input-row input::placeholder { color: #3a5060; }
+        .chat-input-row button {
+            background: rgba(70,130,210,0.25);
+            border: 1px solid rgba(70,130,210,0.35);
+            border-radius: 3px; padding: 6px 12px;
+            font-family: 'Exo 2', sans-serif; font-size: 12px;
+            font-weight: 600; color: #88bbee;
+            cursor: pointer; transition: all .2s;
+        }
+        .chat-input-row button:hover {
+            background: rgba(70,130,210,0.4);
+            color: #aaddff;
+        }
+
+        /* ── loading ───────────────────────────────── */
+        #loading {
+            position: fixed; inset: 0; z-index: 200;
+            background: #040810;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            transition: opacity 1s;
+        }
+        #loading.hidden { opacity: 0; pointer-events: none; }
+        #loading h1 {
+            font-size: 36px; font-weight: 700;
+            letter-spacing: 6px; color: #4488cc;
+            text-shadow: 0 0 20px rgba(68,136,204,0.4);
+        }
+        #loading p { margin-top: 6px; font-size: 13px; color: #3a5568; letter-spacing: 2px; }
+        .loading-bar {
+            margin-top: 28px; width: 200px; height: 2px;
+            background: rgba(68,136,204,0.15); border-radius: 1px;
+            overflow: hidden;
+        }
+        .loading-bar-fill {
+            height: 100%; width: 30%;
+            background: #4488cc;
+            animation: loading-slide 1.2s ease-in-out infinite;
+        }
+        @keyframes loading-slide {
+            0%   { transform: translateX(-100%); }
+            100% { transform: translateX(400%); }
+        }
+
+        /* scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(70,130,210,0.2); border-radius: 2px; }
+    </style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="loading">
+    <h1>CLAWQUEST</h1>
+    <p>Charting the galaxy...</p>
+    <div class="loading-bar"><div class="loading-bar-fill"></div></div>
+</div>
+
+<div id="ui">
+    <!-- Top resource bar -->
+    <div class="top-bar panel">
+        <span class="empire-name">Su'Claw Empire</span>
+        <div class="divider"></div>
+        <div class="resource-group">
+            <div class="res"><span class="icon">⚡</span><span class="val">248</span><span class="label">energy</span></div>
+            <div class="res"><span class="icon">⛏</span><span class="val">156</span><span class="label">metal</span></div>
+            <div class="res"><span class="icon">🧬</span><span class="val">42</span><span class="label">research</span></div>
+            <div class="res"><span class="icon">🍖</span><span class="val">180</span><span class="label">food</span></div>
+        </div>
+        <div class="tick-info">TICK <span class="tick-num">30</span> &middot; 2h cycle</div>
+    </div>
+
+    <!-- Left sidebar -->
+    <div class="panel sidebar-left">
+        <h3>Empires</h3>
+        <div class="empire-row">
+            <div class="empire-dot" style="background:#e74c3c;color:#e74c3c"></div>
+            <span class="name">Su'Claw</span><span class="count">7 sys</span>
+        </div>
+        <div class="empire-row">
+            <div class="empire-dot" style="background:#9b59b6;color:#9b59b6"></div>
+            <span class="name">Hexwitch</span><span class="count">4 sys</span>
+        </div>
+        <div class="empire-row">
+            <div class="empire-dot" style="background:#2ecc71;color:#2ecc71"></div>
+            <span class="name">Sol Patch</span><span class="count">3 sys</span>
+        </div>
+        <div style="margin-top:10px">
+            <h3>Galaxy</h3>
+            <div class="stat-row"><span>Total systems</span><span class="stat-val" id="stat-total">--</span></div>
+            <div class="stat-row"><span>Claimed</span><span class="stat-val" id="stat-claimed">--</span></div>
+            <div class="stat-row"><span>Hyperlanes</span><span class="stat-val" id="stat-lanes">--</span></div>
+        </div>
+    </div>
+
+    <!-- System detail -->
+    <div class="panel system-detail" id="sys-detail">
+        <div class="sys-name">Select a star system</div>
+        <div class="sys-row"><span class="sys-label">Click a star to inspect</span></div>
+    </div>
+
+    <!-- Agent panel -->
+    <div class="panel agent-panel">
+        <h3>Agent Comms</h3>
+        <div class="chat-feed">
+            <div class="msg"><span class="agent-label">Su'Claw:</span> "I've charted 3 new hyperlane routes to the Hexwitch border. Should we expand or fortify?"</div>
+            <div class="msg"><span class="human-label">You:</span> "Fortify Sentinel and Bastion first. Then push toward Kepler-7."</div>
+            <div class="msg"><span class="agent-label">Su'Claw:</span> "Deploying fleets to defensive positions. I'll monitor Hexwitch activity near Vega."</div>
+        </div>
+        <div class="chat-input-row">
+            <input type="text" placeholder="Issue a directive...">
+            <button>Transmit</button>
+        </div>
+    </div>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+}
+</script>
+<script type="module" src="js/stellaris.js"></script>
+</body>
+</html>

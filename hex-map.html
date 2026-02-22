@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLAWQUEST — Hex Map</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            overflow: hidden;
+            font-family: 'Nunito', sans-serif;
+            background: #06060f;
+        }
+        canvas#game {
+            position: fixed; top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            display: block;
+            cursor: grab;
+        }
+        canvas#game:active { cursor: grabbing; }
+
+        /* ── UI Overlay ─────────────────────────────── */
+        #ui {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none; z-index: 10;
+        }
+        #ui > * { pointer-events: auto; }
+
+        .panel {
+            background: linear-gradient(145deg, rgba(14, 18, 35, 0.92) 0%, rgba(8, 10, 24, 0.95) 100%);
+            border: 1.5px solid rgba(80, 120, 200, 0.25);
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(100, 150, 255, 0.08);
+            padding: 12px 16px;
+            backdrop-filter: blur(12px);
+        }
+
+        /* ── Title Bar ──────────────────────────────── */
+        .title-bar {
+            position: absolute; top: 16px; left: 16px;
+        }
+        .title-bar h1 {
+            font-size: 22px; font-weight: 800;
+            color: #7eb8ff;
+            letter-spacing: 3px;
+            text-shadow: 0 0 20px rgba(100, 160, 255, 0.4);
+        }
+        .title-bar .subtitle {
+            font-size: 10px; color: rgba(130, 170, 230, 0.6);
+            letter-spacing: 1.5px; margin-top: 2px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* ── Coordinates ────────────────────────────── */
+        .coords {
+            position: absolute; bottom: 16px; left: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: rgba(130, 170, 230, 0.7);
+        }
+        .coords span { color: #7eb8ff; font-weight: 600; }
+
+        /* ── Tile Info ──────────────────────────────── */
+        .tile-info {
+            position: absolute; bottom: 16px; right: 16px;
+            min-width: 180px;
+        }
+        .tile-info h3 { font-size: 13px; font-weight: 700; color: #7eb8ff; }
+        .tile-info p {
+            font-size: 11px; color: rgba(130, 170, 230, 0.6);
+            margin-top: 3px; line-height: 1.5;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* ── Zoom indicator ─────────────────────────── */
+        .zoom-indicator {
+            position: absolute; top: 16px; right: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: rgba(130, 170, 230, 0.5);
+        }
+
+        /* ── Loading ────────────────────────────────── */
+        #loading {
+            position: fixed; inset: 0;
+            background: #06060f;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 100;
+            transition: opacity 0.8s ease;
+        }
+        #loading.hidden { opacity: 0; pointer-events: none; }
+        #loading h1 {
+            font-size: 36px; font-weight: 800;
+            color: #7eb8ff; letter-spacing: 5px;
+            text-shadow: 0 0 30px rgba(100, 160, 255, 0.5);
+        }
+        #loading p {
+            margin-top: 8px; font-size: 12px;
+            color: rgba(130, 170, 230, 0.5);
+            letter-spacing: 2px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .spinner {
+            margin-top: 24px;
+            width: 28px; height: 28px;
+            border: 2px solid rgba(80, 120, 200, 0.25);
+            border-top-color: #7eb8ff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Controls hint ──────────────────────────── */
+        .controls-hint {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 13px;
+            color: rgba(130, 170, 230, 0.35);
+            letter-spacing: 1px;
+            pointer-events: none;
+            transition: opacity 1.5s ease;
+        }
+        .controls-hint.hidden { opacity: 0; }
+    </style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<!-- Loading screen -->
+<div id="loading">
+    <h1>CLAWQUEST</h1>
+    <p>Loading tileset...</p>
+    <div class="spinner"></div>
+</div>
+
+<!-- Game UI -->
+<div id="ui">
+    <div class="panel title-bar">
+        <h1>CLAWQUEST</h1>
+        <div class="subtitle">HEX MAP ENGINE v0.1</div>
+    </div>
+
+    <div class="panel coords" id="coords">
+        Hex <span>0, 0</span> &nbsp;|&nbsp; Chunk <span>0, 0</span>
+    </div>
+
+    <div class="panel tile-info" id="tile-info">
+        <h3>Hover a tile</h3>
+        <p>Click to select</p>
+    </div>
+
+    <div class="panel zoom-indicator" id="zoom-indicator">
+        1.0x
+    </div>
+
+    <div class="controls-hint" id="hint">
+        drag to pan &nbsp;&middot;&nbsp; scroll to zoom
+    </div>
+</div>
+
+<script src="js/hex-engine.js"></script>
+</body>
+</html>

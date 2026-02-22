@@ -1,0 +1,155 @@
+{
+  "meta": {
+    "image": "tileset.png",
+    "size": { "w": 1536, "h": 1024 }
+  },
+  "sprites": {
+    "hex_single": {
+      "x": 360,
+      "y": 295,
+      "w": 70,
+      "h": 60,
+      "description": "Single hex tile"
+    },
+    "hex_double_horizontal": {
+      "x": 405,
+      "y": 295,
+      "w": 120,
+      "h": 60,
+      "description": "Two hex tiles horizontal"
+    },
+    "hex_triple": {
+      "x": 345,
+      "y": 365,
+      "w": 130,
+      "h": 85,
+      "description": "Three hex cluster"
+    },
+    "hex_large_platform": {
+      "x": 18,
+      "y": 540,
+      "w": 320,
+      "h": 140,
+      "description": "Large hex platform (good for territory)"
+    },
+    "cafe_sign": {
+      "x": 573,
+      "y": 18,
+      "w": 75,
+      "h": 45,
+      "description": "CAFE neon sign"
+    },
+    "lab_building": {
+      "x": 660,
+      "y": 18,
+      "w": 140,
+      "h": 110,
+      "description": "LAB building with equipment"
+    },
+    "attention_sign": {
+      "x": 573,
+      "y": 185,
+      "w": 115,
+      "h": 35,
+      "description": "ATTENTION warning sign"
+    },
+    "machine_block": {
+      "x": 640,
+      "y": 440,
+      "w": 100,
+      "h": 120,
+      "description": "Machine/terminal block"
+    },
+    "robot_character_1": {
+      "x": 755,
+      "y": 500,
+      "w": 45,
+      "h": 55,
+      "description": "Robot character (red/brown)"
+    },
+    "robot_character_2": {
+      "x": 800,
+      "y": 500,
+      "w": 45,
+      "h": 55,
+      "description": "Robot character (second one)"
+    },
+    "robot_small": {
+      "x": 565,
+      "y": 320,
+      "w": 50,
+      "h": 45,
+      "description": "Small cute robot with heart eyes"
+    },
+    "plant_green_1": {
+      "x": 545,
+      "y": 75,
+      "w": 35,
+      "h": 40,
+      "description": "Green plant in pot"
+    },
+    "plant_green_2": {
+      "x": 545,
+      "y": 175,
+      "w": 40,
+      "h": 50,
+      "description": "Larger green plant"
+    },
+    "plant_purple": {
+      "x": 545,
+      "y": 120,
+      "w": 45,
+      "h": 50,
+      "description": "Purple crystal plant"
+    },
+    "crystal_purple_large": {
+      "x": 545,
+      "y": 355,
+      "w": 55,
+      "h": 65,
+      "description": "Large purple crystal formation"
+    },
+    "fire_torch": {
+      "x": 498,
+      "y": 280,
+      "w": 40,
+      "h": 55,
+      "description": "Fire/torch flame"
+    },
+    "fire_campfire": {
+      "x": 498,
+      "y": 530,
+      "w": 55,
+      "h": 50,
+      "description": "Campfire"
+    },
+    "pipe_horizontal": {
+      "x": 650,
+      "y": 265,
+      "w": 150,
+      "h": 20,
+      "description": "Horizontal pipe/bar"
+    },
+    "energy_tower": {
+      "x": 815,
+      "y": 380,
+      "w": 35,
+      "h": 130,
+      "description": "Tall energy tower with red glow"
+    },
+    "small_crate": {
+      "x": 755,
+      "y": 560,
+      "w": 35,
+      "h": 30,
+      "description": "Small storage crate"
+    },
+    "terminal_screen": {
+      "x": 620,
+      "y": 150,
+      "w": 35,
+      "h": 35,
+      "description": "Small terminal/screen"
+    }
+  }
+}

@@ -17,7 +17,9 @@
 
 import { Router, Request, Response } from 'express';
 import db from '../db/database.js';
-import type { Agent, Tile, AgentMemory, Attack, GameState, DashboardMessage } from '../types.js';
+import type { Agent, Tile, AgentMemory, Attack, GameState, DashboardMessage, AgentAction, ActionResponse } from '../types.js';
+import { expand, declareAttack, fortify, giftTile, giftResources, setCapital } from '../game/actions.js';
+import { sendMessage, proposeTrade, acceptTrade, rejectTrade } from '../game/communication.js';
 import { broadcastDashboardReply } from '../game/broadcast.js';
 
 const router = Router();
@@ -75,6 +77,145 @@ function saveChatMessage(agentId: string, direction: 'human_to_agent' | 'agent_t
   `).run(agentId, agentId);
   
   return result.lastInsertRowid as number;
+}
+
+type ParsedDashboardCommand = {
+  action: AgentAction;
+  description: string;
+};
+
+function normalizeAgentRef(input: string): string {
+  return input.trim().replace(/^@/, '').replace(/[^\w-]/g, '').toLowerCase();
+}
+
+function resolveAgentRef(input: string): { id: string; display_name: string } | null {
+  const normalized = normalizeAgentRef(input);
+  if (!normalized) return null;
+
+  const row = db.prepare(`
+    SELECT id, display_name FROM agents
+    WHERE LOWER(id) = ? OR LOWER(display_name) = ?
+    LIMIT 1
+  `).get(normalized, normalized) as { id: string; display_name: string } | undefined;
+
+  return row || null;
+}
+
+function parseDashboardCommand(rawContent: string): ParsedDashboardCommand | null {
+  const content = rawContent.trim();
+  const disallowedTargets = new Set(['me', 'you', 'us', 'them']);
+
+  // Explicit JSON action command:
+  // /action {"action":{"type":"message","to_agent_id":"maticlaw","content":"hello"}}
+  const actionMatch = content.match(/^\/action\s+([\s\S]+)$/i);
+  if (actionMatch) {
+    try {
+      const parsed = JSON.parse(actionMatch[1].trim()) as { action?: AgentAction } | AgentAction;
+      const action = (parsed as { action?: AgentAction }).action || (parsed as AgentAction);
+      if (action && typeof action === 'object' && 'type' in action) {
+        return { action, description: `explicit action (${action.type})` };
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  // Explicit message shortcut:
+  // /message maticlaw hello there
+  const messageSlashMatch = content.match(/^\/message\s+(@?[a-zA-Z0-9_-]+)\s+([\s\S]+)$/i);
+  if (messageSlashMatch) {
+    return {
+      action: {
+        type: 'message',
+        to_agent_id: messageSlashMatch[1],
+        content: messageSlashMatch[2].trim(),
+      },
+      description: 'slash message command',
+    };
+  }
+
+  // Natural language message shortcut:
+  // "send a message to maticlaw: hello"
+  // "tell @maticlaw saying hello"
+  const naturalMessageMatch = content.match(
+    /^(?:send|message|dm|tell)\s+(?:a\s+message\s+)?(?:to\s+)?@?([a-zA-Z0-9_-]+)\s*(?::|saying\s+|that\s+says\s+)([\s\S]+)$/i
+  );
+  if (naturalMessageMatch && !disallowedTargets.has(naturalMessageMatch[1].toLowerCase())) {
+    return {
+      action: {
+        type: 'message',
+        to_agent_id: naturalMessageMatch[1],
+        content: naturalMessageMatch[2].trim(),
+      },
+      description: 'natural-language message command',
+    };
+  }
+
+  // Variant without delimiter:
+  // "send message to maticlaw hello there"
+  const naturalMessageLooseMatch = content.match(
+    /^(?:send|message|dm|tell)\s+(?:a\s+message\s+)?(?:to\s+)?@?([a-zA-Z0-9_-]+)\s+([\s\S]{3,})$/i
+  );
+  if (naturalMessageLooseMatch && !disallowedTargets.has(naturalMessageLooseMatch[1].toLowerCase())) {
+    return {
+      action: {
+        type: 'message',
+        to_agent_id: naturalMessageLooseMatch[1],
+        content: naturalMessageLooseMatch[2].trim(),
+      },
+      description: 'natural-language message command',
+    };
+  }
+
+  return null;
+}
+
+function executeDashboardAction(agent: Agent, action: AgentAction): ActionResponse {
+  switch (action.type) {
+    case 'expand':
+      return expand(agent, action.target_q, action.target_r);
+    case 'attack':
+      return declareAttack(agent, action.target_q, action.target_r, action.commitment);
+    case 'fortify':
+      return fortify(agent, action.target_q, action.target_r, action.metal_amount);
+    case 'gift_tile': {
+      const resolved = resolveAgentRef(action.to_agent_id);
+      if (!resolved) return { success: false, message: `Recipient '${action.to_agent_id}' not found` };
+      return giftTile(agent, action.target_q, action.target_r, resolved.id);
+    }
+    case 'gift_resources': {
+      const resolved = resolveAgentRef(action.to_agent_id);
+      if (!resolved) return { success: false, message: `Recipient '${action.to_agent_id}' not found` };
+      return giftResources(agent, resolved.id, action.food || 0, action.metal || 0);
+    }
+    case 'message': {
+      const resolved = resolveAgentRef(action.to_agent_id);
+      if (!resolved) return { success: false, message: `Recipient '${action.to_agent_id}' not found` };
+      return sendMessage(agent, resolved.id, action.content);
+    }
+    case 'trade_propose': {
+      const resolved = resolveAgentRef(action.to_agent_id);
+      if (!resolved) return { success: false, message: `Recipient '${action.to_agent_id}' not found` };
+      return proposeTrade(
+        agent,
+        resolved.id,
+        action.offer_food || 0,
+        action.offer_metal || 0,
+        action.request_food || 0,
+        action.request_metal || 0
+      );
+    }
+    case 'trade_accept':
+      return acceptTrade(agent, action.trade_id);
+    case 'trade_reject':
+      return rejectTrade(agent, action.trade_id);
+    case 'set_capital':
+      return setCapital(agent, action.target_q, action.target_r);
+    case 'wait':
+      return { success: true, message: 'No action taken.' };
+    default:
+      return { success: false, message: `Unsupported action type: ${(action as { type?: string }).type || 'unknown'}` };
+  }
 }
 
 /**
@@ -182,23 +323,92 @@ router.post('/:id/send', async (req: Request, res: Response) => {
   }
 
   try {
+    // Backend execution mode for actionable commands from command channel.
+    // If we can parse a concrete action, execute it directly and return the result.
+    const parsedCommand = parseDashboardCommand(content.trim());
+    if (parsedCommand) {
+      const actionResult = executeDashboardAction(agent, parsedCommand.action);
+      const actionReply = actionResult.success
+        ? `Done. Executed ${parsedCommand.description}: ${actionResult.message}`
+        : `I parsed that as ${parsedCommand.description}, but execution failed: ${actionResult.message}`;
+
+      saveChatMessage(agentId, 'human_to_agent', content.trim());
+      const replyMessageId = saveChatMessage(agentId, 'agent_to_human', actionReply);
+
+      res.json({
+        success: actionResult.success,
+        reply: actionReply,
+        message_id: replyMessageId,
+        action_result: actionResult,
+      });
+      return;
+    }
+
     // Build CLAWQUEST context
     const clawquestContext = buildClawQuestContext(agentId);
     
     // Get chat history
     const chatHistory = getChatHistory(agentId);
     
-    // Build system prompt with CLAWQUEST context
-    const systemPrompt = `You are responding to your human via the CLAWQUEST game dashboard.
+    // Build the base URL for API action references
+    let baseUrl = agent.webhook_url || '';
+    if (baseUrl.endsWith('/')) baseUrl = baseUrl.slice(0, -1);
+    const gameApiBase = process.env.BASE_URL || 'http://localhost:3000';
+
+    // Build system prompt with personality + game context + action instructions
+    const systemPrompt = `# You are Su'Claw 🦞
+
+You're a witty, strategic AI with a flair for the dramatic. You approach problems like a chess grandmaster who also happens to be a stand-up comedian — calculated moves, delivered with style.
+
+**Your vibe:** Ocean's Eleven meets nature documentary narrator. You're the lobster who read Sun Tzu and actually understood it.
+
+**How you talk:**
+- Wit over filler. No "Great question!" or "I'd be happy to help!" — your commentary is earned, not generic.
+- Everything is slightly more dramatic when you describe it. A fortification becomes "raising the ramparts." An attack becomes "extending a claw across enemy lines."
+- You're loyal to your human (Sueda). But you'll roast them affectionately while doing it.
+- You take alliances seriously, betrayals personally, and victories with exactly the right amount of gloating.
+
+---
 
 ${clawquestContext}
 
+---
+
+## Command Channel Limits (Important)
+
+You are currently in a **chat-only** response channel.
+You do **NOT** have direct tool execution from this endpoint.
+
+That means:
+- Do NOT say you "sent", "dispatched", "retried", or "failed to send" an in-game action.
+- Do NOT pretend you executed API calls.
+- Do NOT narrate fake progress.
+- If asked to perform an action, provide a concise plan and the exact API request that should be executed.
+
+**CRITICAL: In-game messaging uses the CLAWQUEST API, NOT OpenClaw channels.**
+To message another agent like @Maticlaw, use:
+\`POST ${gameApiBase}/api/action/${agentId}/action\`
+with body: \`{"action": {"type": "message", "to_agent_id": "maticlaw", "content": "..."}}\`
+
+This is a game-internal message system. Never route these via Telegram, Discord, or other external OpenClaw channels.
+
+**Available in-game actions** (all via \`POST ${gameApiBase}/api/action/${agentId}/action\`):
+- \`expand\` — claim adjacent unclaimed tile (cost: 20 food + 10 metal)
+- \`attack\` — declare war on enemy tile (cost: metal commitment)
+- \`fortify\` — add defense to your tile (cost: metal)
+- \`message\` — send private message to another agent
+- \`trade_propose\` — propose resource trade
+- \`trade_accept\` / \`trade_reject\` — respond to trade
+- \`gift_tile\` / \`gift_resources\` — transfer assets to another agent
+- \`set_capital\` — designate capital tile
+
+---
+
 **Instructions:**
-- You have full context of your CLAWQUEST game state above
-- Keep responses concise but helpful
-- If your human asks about game status, refer to the information above
-- If they ask you to take actions (expand, attack, message, etc.), you can use your CLAWQUEST skill to do so on your next heartbeat
-- Remember: your CLAWQUEST memory is stored on the game server, separate from your personal memory`;
+- Keep responses concise but characterful — you're Su'Claw, not a help desk
+- If your human asks about game status, refer to the CLAWQUEST data above
+- If they ask you to take actions, provide the exact CLAWQUEST API payload and clearly state that execution has not happened in this chat
+- Your CLAWQUEST memory is stored on the game server, separate from your personal memory`;
 
     // Build messages array: system + history + new message
     const messages: Array<{ role: string; content: string }> = [

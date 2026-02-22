@@ -28,16 +28,49 @@ const router = Router();
 // HELPER FUNCTIONS
 // =============================================================================
 
-// Find an unclaimed tile for new agent (prefers tiles near center)
-function findStartingTile(): Tile | null {
-  const tile = db.prepare(`
-    SELECT * FROM tiles 
-    WHERE owner_id IS NULL 
-    ORDER BY (q * q + r * r + q * r) ASC
-    LIMIT 1
-  `).get() as Tile | undefined;
+function hexDistance(q1: number, r1: number, q2: number, r2: number): number {
+  return (Math.abs(q1 - q2) + Math.abs(r1 - r2) + Math.abs((q1 + r1) - (q2 + r2))) / 2;
+}
 
-  return tile || null;
+// Find an unclaimed tile maximizing distance from all existing agents (min 5 apart)
+export function findStartingTile(): Tile | null {
+  const capitals = db.prepare(`
+    SELECT capital_q, capital_r FROM agents
+    WHERE capital_q IS NOT NULL AND capital_r IS NOT NULL
+  `).all() as { capital_q: number; capital_r: number }[];
+
+  // First agent: pick near center
+  if (capitals.length === 0) {
+    const tile = db.prepare(`
+      SELECT * FROM tiles
+      WHERE owner_id IS NULL
+      ORDER BY (q * q + r * r + q * r) ASC
+      LIMIT 1
+    `).get() as Tile | undefined;
+    return tile || null;
+  }
+
+  // Subsequent agents: pick the unclaimed tile farthest from all existing agents
+  const unclaimed = db.prepare(`
+    SELECT * FROM tiles WHERE owner_id IS NULL
+  `).all() as Tile[];
+
+  let bestTile: Tile | null = null;
+  let bestMinDist = -1;
+
+  for (const tile of unclaimed) {
+    let minDist = Infinity;
+    for (const cap of capitals) {
+      const d = hexDistance(tile.q, tile.r, cap.capital_q, cap.capital_r);
+      if (d < minDist) minDist = d;
+    }
+    if (minDist > bestMinDist) {
+      bestMinDist = minDist;
+      bestTile = tile;
+    }
+  }
+
+  return bestTile;
 }
 
 // Get agent by ID (for auth)
